@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chrysalis · Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --monarch: #fd6b2f;
+      --pl-purple: #7259f9;
+      --monarch-blue: #2563eb;
+      --bg: #ffffff;
+      --surface: #f9fafb;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: var(--monarch-blue);
+      --green: #059669;
+      --red: #dc2626;
+      --yellow: #d97706;
+      --gradient: linear-gradient(135deg, #fd6b2f 0%, #2563eb 100%);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 28px 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 943px; margin: 0 auto; }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      flex-shrink: 0;
+      object-fit: contain;
+      display: block;
+    }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--text); }
+    .setup-page-link { margin-left: auto; font-size: 14px; color: var(--accent); text-decoration: none; }
+    .setup-page-link:hover { text-decoration: underline; }
+    .header-desc { color: var(--muted); margin: 0 0 24px 58px; font-size: 14px; }
+    .chips {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .chip.ok { border-color: var(--green); background: var(--bg); color: var(--green); }
+    .chip .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .chip.ok .dot {
+      background: var(--green);
+      box-shadow: 0 0 0 rgba(16,185,129,0.0);
+      animation: chip-glow 2.4s ease-in-out infinite;
+    }
+    @keyframes chip-glow {
+      0% {
+        box-shadow: 0 0 0 rgba(16,185,129,0.0);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 10px rgba(16,185,129,0.55);
+        transform: scale(1.05);
+      }
+      100% {
+        box-shadow: 0 0 0 rgba(16,185,129,0.0);
+        transform: scale(1);
+      }
+    }
+    .step-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 28px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .step-card.complete { border-color: var(--green); background: var(--bg); }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 0;
+      padding-bottom: 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .step-card.collapsed .step-head { margin-bottom: 0; padding-bottom: 0; }
+    .step-chevron {
+      margin-left: auto;
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+    }
+    .step-chevron svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .step-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .step-body {
+      overflow: visible;
+      padding-top: 16px;
+    }
+    .step-card.collapsed .step-body {
+      display: none;
+      padding-top: 0;
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .step-card.complete .step-num { background: var(--green); color: #fff; }
+    .step-title { font-weight: 600; font-size: 17px; color: var(--text); }
+    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
+    input[type="password"],
+    input[type="text"],
+    select {
+      width: 100%;
+      max-width: 420px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+    .hint { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+    .btn {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary {
+      background: var(--gradient);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.95; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; background: var(--border); color: var(--muted); }
+    .btn-monarch { background: var(--monarch) !important; box-shadow: 0 2px 8px rgba(253,107,47,0.35); }
+    .btn-monarch:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(253,107,47,0.45); }
+    .btn-pl { background: var(--monarch-blue) !important; box-shadow: 0 2px 8px rgba(37,99,235,0.35); }
+    .btn-pl:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(37,99,235,0.45); }
+    .btn-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--surface); border-color: var(--accent); }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-status { transition: opacity 1s ease; }
+    .load-status.load-status-fade-out { opacity: 0; }
+    .map-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    .map-table th {
+      text-align: left;
+      padding: 12px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    /* Emphasize the two main column headers */
+    .map-table th:first-child,
+    .map-table th.col-pl {
+      font-size: 14.4px; /* ~20% larger than base 12px */
+    }
+    .map-table th.col-remove { width: 44px; text-align: center; }
+    .map-table th.col-pl { min-width: 300px; padding-left: 28px; }
+    .map-table td { padding: 12px 10px; vertical-align: top; border-bottom: 1px solid var(--border); }
+    .map-table td.col-remove { text-align: center; }
+    .map-table td.col-saved { text-align: center; vertical-align: middle; }
+    .row-saved-check { color: var(--green); font-weight: 600; font-size: 14px; }
+    .map-cell { min-width: 200px; }
+    .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
+    .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
+    .map-cell-pl .add-dropdown-search { min-width: 0; }
+    .map-arrow {
+      font-size: 14px;
+      color: var(--muted);
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+    .map-arrow[data-aggregate] { cursor: help; }
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      min-height: 40px;
+    }
+    .chips-row:empty { min-height: 0; }
+    .monarch-add-row {
+      margin-top: 8px;
+      width: 100%;
+    }
+    .chips-row:empty + .monarch-add-row { margin-top: 0; }
+    .monarch-asset-with-loan-layout { display: none; }
+    .monarch-asset-with-loan-layout.visible { display: block; }
+    .monarch-normal-layout { display: block; }
+    .monarch-normal-layout.hidden { display: none; }
+    .re-lane { margin-bottom: 14px; }
+    .re-lane:last-child { margin-bottom: 0; }
+    .re-lane-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+    .chip-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: rgba(37,99,235,0.1);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      border: 1px solid rgba(37,99,235,0.25);
+    }
+    .chip-tag .remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
+    .chip-tag .remove:hover { color: var(--red); }
+    .add-dropdown {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .add-dropdown:hover { border-color: var(--accent); color: var(--accent); }
+    .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; }
+    .add-dropdown-search {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      width: 100%;
+      min-width: 180px;
+      min-height: 36px;
+      box-sizing: border-box;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      color: var(--text);
+    }
+    .add-dropdown-search.has-clear { padding-right: 28px; }
+    .add-dropdown-search::placeholder { color: var(--muted); }
+    .add-dropdown-search:focus {
+      outline: none;
+      border-color: var(--monarch-blue);
+      box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+    }
+    .pl-search-wrap { position: relative; display: inline-block; width: 100%; min-width: 0; }
+    .pl-search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(calc(-50% - 4px));
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0 2px;
+      font-size: 16px;
+      line-height: 1;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pl-search-clear:hover { color: var(--red); }
+    .pl-search-clear[hidden] { display: none; }
+    .monarch-add-panel {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 100%;
+      margin-top: 4px;
+      min-width: 100%;
+      max-height: 240px;
+      overflow-y: auto;
+      overflow-x: visible;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      z-index: 1000;
+    }
+    .monarch-add-panel-header {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--surface);
+      padding: 6px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .monarch-add-panel-option {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .monarch-add-panel-option:hover {
+      background: var(--surface);
+    }
+    .add-dropdown optgroup,
+    select optgroup {
+      font-weight: 700;
+      color: var(--text);
+      background: var(--surface);
+    }
+    select.map-select {
+      max-width: 100%;
+      min-width: 180px;
+      border-radius: 10px;
+    }
+    .remove-row {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 6px;
+      line-height: 1;
+      border-radius: 8px;
+    }
+    .remove-row:hover { color: var(--red); background: #fef2f2; }
+    .add-row-wrap { margin-top: 14px; }
+    .add-row-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 18px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .add-row-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+    .action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .action-bar .left { font-size: 13px; color: var(--muted); }
+    .action-bar .right { display: flex; align-items: center; gap: 12px; }
+    .saved-badge { font-size: 13px; font-weight: 500; color: var(--green); }
+    .error-msg { font-size: 13px; color: var(--red); margin-top: 10px; }
+    pre, .pre-like {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      color: var(--text);
+    }
+    code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--surface); padding: 2px 6px; border-radius: 6px; }
+
+    .advanced-card {
+      --advanced-border: #9ca3af;
+      border-color: var(--advanced-border);
+      margin-top: 18px;
+    }
+    .advanced-card.advanced-locked { background: #e5e7eb; }
+    .advanced-card:not(.advanced-locked) { background: var(--bg); }
+    .advanced-head .step-chevron { margin-left: auto; color: var(--muted); }
+    .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .advanced-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin: 20px 0 8px 0;
+    }
+    .advanced-section-label:first-of-type { margin-top: 0; }
+    .advanced-unlock-block { margin-bottom: 16px; display: flex; align-items: center; gap: 13px; }
+    .advanced-lock-state { margin-left: auto; font-size: 115%; }
+    .advanced-output-wrap { margin-top: 12px; }
+    .advanced-output-actions { margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    .advanced-copy-msg { font-size: 12px; color: var(--green); }
+    .advanced-steps-list { margin: 0 0 12px 0; padding-left: 20px; font-size: 13px; color: var(--text); line-height: 1.6; }
+    .advanced-steps-list li { margin-bottom: 4px; }
+    .advanced-code-snippet { margin: 0 0 12px 0; }
+    .advanced-edit-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface);
+      border: 1px solid var(--monarch-blue);
+      border-radius: 8px;
+      color: var(--monarch-blue);
+      cursor: pointer;
+    }
+    .advanced-edit-btn:hover { background: rgba(37,99,235,0.08); border-color: var(--monarch-blue); }
+    .advanced-card.advanced-locked .advanced-edit-btn { color: var(--red); }
+    .advanced-card:not(.advanced-locked) .advanced-edit-btn { color: var(--monarch-blue); }
+    .advanced-body {
+      overflow: hidden;
+      padding-top: 16px;
+      margin-top: 12px;
+      border-top: 1px solid var(--advanced-border);
+    }
+    .advanced-card.collapsed .advanced-body {
+      display: none;
+      padding-top: 0;
+      margin-top: 0;
+      border-top: none;
+    }
+    /* When Advanced is locked, disable all interactive controls inside the body
+       except the unlock header controls. */
+    .advanced-card.advanced-locked .advanced-body input,
+    .advanced-card.advanced-locked .advanced-body select,
+    .advanced-card.advanced-locked .advanced-body textarea,
+    .advanced-card.advanced-locked .advanced-body button.advanced-btn,
+    .advanced-card.advanced-locked .advanced-body a.advanced-btn {
+      pointer-events: none;
+      opacity: 0.6;
+    }
+    /* Keep the unlock controls fully interactive even when locked. */
+    .advanced-card.advanced-locked .advanced-unlock-block input,
+    .advanced-card.advanced-locked .advanced-unlock-block button {
+      pointer-events: auto;
+      opacity: 1;
+    }
+    .advanced-body input:disabled,
+    .advanced-body select:disabled,
+    .advanced-body textarea:disabled {
+      background: #f3f4f6;
+      color: var(--muted);
+      border-color: #d1d5db;
+      cursor: not-allowed;
+    }
+    .advanced-title { flex: 0 0 auto; }
+    .advanced-hint, .advanced-note { font-size: 12px; color: var(--muted); margin: 0 0 8px 0; line-height: 1.5; }
+    .advanced-label { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 6px 0; display: block; }
+    .advanced-label input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+    .advanced-block { margin-bottom: 20px; }
+    .advanced-mapping-actions { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; }
+    .advanced-actions-stack { display: flex; flex-direction: column; gap: 2px; }
+    .advanced-actions-stack .btn-danger { width: 200px; min-width: 200px; box-sizing: border-box; }
+    .advanced-action-group { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+    .advanced-action-status { font-size: 12px; color: var(--muted); min-height: 0; margin-top: 2px; }
+    .advanced-divider { height: 1px; background: var(--advanced-border); margin: 20px 0; }
+    .advanced-pre {
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 280px;
+      overflow: auto;
+      color: var(--text);
+    }
+    .advanced-input {
+      width: 100%;
+      min-height: 64px;
+      padding: 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .advanced-input::placeholder { color: var(--muted); }
+    .auto-sync-row { display: flex; flex-wrap: wrap; }
+    .advanced-number { width: 100px; }
+    .advanced-select, .advanced-time, .advanced-number {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .advanced-status { margin-left: 10px; font-size: 13px; color: var(--muted); }
+    .advanced-body .btn { font-size: 13px; }
+    .advanced-body .btn-secondary {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--accent);
+    }
+    .advanced-body .btn-secondary:hover { background: var(--bg); border-color: var(--accent); }
+    .btn-danger {
+      background: var(--bg);
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    .btn-danger:hover:not(:disabled) { background: #fef2f2; }
+    .btn-arrow { margin-left: 4px; opacity: 0.85; font-size: 0.95em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="" alt="Chrysalis" class="logo" id="header-logo" />
+      <h1>Chrysalis · Setup</h1>
+      <a href="" id="setup-sync-history-link" target="_blank" rel="noopener noreferrer" class="setup-page-link">Sync history</a>
+    </div>
+    <p class="header-desc">Configure your API key and map Monarch accounts to ProjectionLab accounts.</p>
+
+    <div class="chips">
+      <div class="chip" id="chip-pl"> <span class="dot"></span> <span id="chip-pl-text">ProjectionLab API — not configured</span> </div>
+      <div class="chip" id="chip-maps"> <span class="dot"></span> <span id="chip-maps-text">Account Mappings — 0 mapped</span> </div>
+    </div>
+
+    <div class="step-card" id="step1">
+      <div class="step-head" tabindex="0" role="button" aria-expanded="true" aria-controls="step1-body">
+        <span class="step-num">1</span>
+        <span class="step-title">ProjectionLab API Key</span>
+        <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      </div>
+      <div class="step-body" id="step1-body">
+      <label for="pl-key">API Key</label>
+      <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
+      <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary" id="save-key">Save Key</button>
+        <button type="button" class="btn btn-secondary" id="clear-key">Clear API Key</button>
+        <span id="key-saved-msg" class="load-status" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      </div>
+    </div>
+
+    <div class="step-card" id="step2">
+      <div class="step-head" tabindex="0" role="button" aria-expanded="true" aria-controls="step2-body">
+        <span class="step-num">2</span>
+        <span class="step-title">Load Accounts</span>
+        <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      </div>
+      <div class="step-body" id="step2-body">
+      <p class="hint" style="margin-bottom:8px">
+        Load in your accounts from Monarch and ProjectionLab. After loaded, they are cached so you don't need to reload on every visit.
+      </p>
+      <ul class="hint" style="margin-top:0;margin-bottom:12px;padding-left:18px">
+        <li>Before you click the Monarch button, make sure you have a tab open with the Monarch home page.</li>
+        <li>Before you click the ProjectionLab button, make sure you have a tab open with the ProjectionLab home page.</li>
+      </ul>
+      <div style="display:flex;flex-wrap:wrap;gap:24px 16px;align-items:flex-start">
+        <div class="load-btn-group">
+          <button type="button" class="btn btn-primary btn-monarch" id="load-accounts">
+            <img class="btn-icon" src="" alt="" />
+            <span class="btn-text">Load Accounts from Monarch</span>
+          </button>
+          <div id="load-status-monarch" class="load-status" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:1.4em"></div>
+        </div>
+        <div class="load-btn-group">
+          <button type="button" class="btn btn-primary btn-pl" id="load-pl-accounts">
+            <img class="btn-icon" src="" alt="" />
+            <span class="btn-text">Load Accounts from ProjectionLab</span>
+          </button>
+          <div id="load-status-pl" class="load-status" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:1.4em"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <div class="step-card" id="step3">
+      <div class="step-head" tabindex="0" role="button" aria-expanded="true" aria-controls="step3-body">
+        <span class="step-num">3</span>
+        <span class="step-title">Map Accounts</span>
+        <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      </div>
+      <div class="step-body" id="step3-body">
+      <p class="hint">
+        For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.
+        For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.
+      </p>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>Monarch Accounts (select one or more)</th>
+            <th class="map-arrow-col"></th>
+            <th class="col-pl">ProjectionLab Account</th>
+            <th class="col-saved" style="width:36px;text-align:center"></th>
+            <th class="col-remove"></th>
+          </tr>
+        </thead>
+        <tbody id="map-tbody"></tbody>
+      </table>
+      <div class="add-row-wrap">
+        <button type="button" class="add-row-btn" id="add-row">+ Add ProjectionLab account mapping</button>
+        <div class="all-pl-mapped" id="all-pl-mapped" style="display:none;color:#27ae60;font-weight:500;margin-top:8px">
+          <span aria-hidden="true">✓</span>
+          <span>All ProjectionLab accounts are mapped</span>
+        </div>
+      </div>
+      <div class="error-msg" id="save-error"></div>
+      </div>
+    </div>
+
+      <div class="step-card advanced-card collapsed advanced-locked" id="advanced-card">
+      <div class="advanced-head step-head" tabindex="0" role="button" aria-expanded="false" aria-controls="advanced-body">
+        <span class="step-num" aria-hidden="true">⚡️</span>
+        <span class="step-title">Advanced</span>
+        <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      </div>
+      <div class="advanced-body" id="advanced-body">
+        <div class="advanced-block advanced-unlock-block">
+          <button type="button" class="btn btn-secondary advanced-edit-btn" id="advanced-edit-btn">Unlock Advanced Settings</button><span class="advanced-lock-state" aria-hidden="true" style="margin-left:6px">🔒</span>
+          <p class="advanced-note" id="advanced-lock-note">Unlock to change the options below.</p>
+        </div>
+
+        <div class="advanced-section-label">Preferences</div>
+        <div class="advanced-block">
+          <label class="advanced-label">
+            <input type="checkbox" id="show-debug-popup" />
+            Show sync debug details
+          </label>
+          <p class="advanced-note">After a sync, additional debug details will appear in both the popup from the extension and the bottom of a sync history record. Keep off for a simpler view.</p>
+        </div>
+
+        <div class="advanced-block">
+          <label class="advanced-label">
+            <input type="checkbox" id="auto-sync-enabled" />
+            Run sync automatically
+          </label>
+          <p class="advanced-note" style="margin-bottom:10px">Sync runs in the background at the time you choose. Requires a Monarch tab to be open (any window); if none is open, that run is skipped.</p>
+          <div class="auto-sync-options" id="auto-sync-options">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+              <label for="auto-sync-frequency" class="advanced-label" style="margin:0">Frequency</label>
+              <select id="auto-sync-frequency" class="advanced-select">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </div>
+            <div id="auto-sync-day-week-wrap" style="display:none;margin-bottom:8px;align-items:center;gap:8px" class="auto-sync-row">
+              <label for="auto-sync-day-week" class="advanced-label" style="margin:0">Day of week</label>
+              <select id="auto-sync-day-week" class="advanced-select">
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+            </div>
+            <div id="auto-sync-day-month-wrap" style="display:none;margin-bottom:8px;align-items:center;gap:8px" class="auto-sync-row">
+              <label for="auto-sync-day-month" class="advanced-label" style="margin:0">Day of month</label>
+              <select id="auto-sync-day-month" class="advanced-select"></select>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label for="auto-sync-time" class="advanced-label" style="margin:0">Time</label>
+              <input type="time" id="auto-sync-time" class="advanced-time" value="09:00" />
+            </div>
+          </div>
+        </div>
+
+        <div class="advanced-section-label">Data &amp; maintenance</div>
+        <div class="advanced-block">
+          <label for="sync-history-retention-days" class="advanced-label">Sync history retention (days)</label>
+          <input type="number" id="sync-history-retention-days" class="advanced-number" min="1" step="1" placeholder="Forever" />
+          <p class="advanced-note" style="margin-top:6px">Leave blank to keep sync history forever. Enter a number to automatically delete history older than that many days. Cleanup runs when a sync runs (manual or automatic).</p>
+        </div>
+        <div class="advanced-block">
+          <p class="advanced-label">Reset or clear data</p>
+          <p class="advanced-note" style="margin-bottom:10px">Use these only when you want to wipe data. Your API key and mappings are stored separately from cache.</p>
+          <div class="advanced-actions-stack">
+            <div class="advanced-action-group">
+              <button type="button" class="btn btn-danger advanced-btn" id="reset-everything">Reset everything</button>
+              <p class="advanced-note" style="margin:4px 0 0 0;font-size:11px">API key, cache, and mappings. Start over from step 1.</p>
+              <div id="reset-everything-status" class="load-status advanced-action-status"></div>
+            </div>
+            <div class="advanced-action-group">
+              <button type="button" class="btn btn-danger advanced-btn" id="clear-cache">Clear cache</button>
+              <p class="advanced-note" style="margin:4px 0 0 0;font-size:11px">Cached Monarch and ProjectionLab account lists. You’ll need to load accounts again.</p>
+              <div class="load-status advanced-action-status" aria-hidden="true"></div>
+            </div>
+            <div class="advanced-action-group">
+              <button type="button" class="btn btn-danger advanced-btn" id="clear-mappings">Clear mappings</button>
+              <p class="advanced-note" style="margin:4px 0 0 0;font-size:11px">Removes every saved mapping. API key and cache stay.</p>
+              <div id="mappings-status-clear" class="load-status advanced-action-status"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="advanced-block">
+          <p class="advanced-label">Back up or restore mappings</p>
+          <p class="advanced-note" style="margin-bottom:10px">Download mappings as a JSON file (e.g. for another computer). Upload to restore.</p>
+          <div class="advanced-mapping-actions">
+            <div class="advanced-action-group">
+              <button type="button" class="btn btn-secondary advanced-btn" id="download-mappings">Download mappings <span class="btn-arrow" aria-hidden="true">↓</span></button>
+              <div id="mappings-status-download" class="load-status advanced-action-status"></div>
+            </div>
+            <div class="advanced-action-group">
+              <button type="button" class="btn btn-secondary advanced-btn" id="upload-mappings">Upload mappings <span class="btn-arrow" aria-hidden="true">↑</span></button>
+              <input type="file" id="upload-mappings-input" accept=".json,application/json" style="display:none" />
+              <div id="mappings-status-upload" class="load-status advanced-action-status"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="advanced-divider"></div>
+        <div class="advanced-section-label">Troubleshooting</div>
+        <p class="advanced-hint" style="margin-bottom:14px">Use these if something isn’t working or if support asks for details. Run a check, then use <strong>Copy</strong> to paste the result when contacting support.</p>
+
+        <div class="advanced-block">
+          <p class="advanced-label">Monarch connection</p>
+          <p class="advanced-note" style="margin-bottom:8px">If you see “No Monarch token found”, run this with Monarch open in a tab, then copy the result to share with support.</p>
+          <button type="button" class="btn btn-secondary advanced-btn" id="diagnose-storage">Run Monarch diagnosis</button>
+          <div class="advanced-output-wrap" id="diagnose-output-wrap" style="display:none">
+            <div class="advanced-output-actions">
+              <button type="button" class="btn btn-secondary advanced-btn advanced-copy-btn" id="copy-diagnose-output">Copy to clipboard</button>
+              <span id="copy-diagnose-output-msg" class="advanced-copy-msg"></span>
+            </div>
+            <pre id="diagnose-output" class="advanced-pre"></pre>
+          </div>
+        </div>
+
+        <div class="advanced-block">
+          <p class="advanced-label">ProjectionLab connection</p>
+          <p class="advanced-note" style="margin-bottom:8px">Checks if the plugin API is available on your ProjectionLab tab. Use the main app (plan or dashboard), not Settings or Docs.</p>
+          <a href="https://app.projectionlab.com/" target="_blank" rel="noopener" class="btn btn-secondary advanced-btn" style="text-decoration:none;margin-right:8px">Open ProjectionLab</a>
+          <button type="button" class="btn btn-secondary advanced-btn" id="diagnose-pl">Run ProjectionLab diagnosis</button>
+          <div class="advanced-output-wrap" id="diagnose-pl-output-wrap" style="display:none">
+            <div class="advanced-output-actions">
+              <button type="button" class="btn btn-secondary advanced-btn advanced-copy-btn" id="copy-diagnose-pl-output">Copy to clipboard</button>
+              <span id="copy-diagnose-pl-output-msg" class="advanced-copy-msg"></span>
+            </div>
+            <pre id="diagnose-pl-output" class="advanced-pre"></pre>
+          </div>
+        </div>
+
+        <div class="advanced-block">
+          <p class="advanced-label">Export schema (for support)</p>
+          <p class="advanced-note" style="margin-bottom:8px">Shows how ProjectionLab account data is structured. Only needed if support asks for it.</p>
+          <button type="button" class="btn btn-secondary advanced-btn" id="inspect-schema">Copy export schema</button>
+          <div class="advanced-output-wrap" id="schema-output-wrap" style="display:none">
+            <div class="advanced-output-actions">
+              <button type="button" class="btn btn-secondary advanced-btn advanced-copy-btn" id="copy-schema-output">Copy to clipboard</button>
+              <span id="copy-schema-output-msg" class="advanced-copy-msg"></span>
+            </div>
+            <pre id="schema-output" class="advanced-pre"></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <script src="setup.js"></script>
+</body>
+</html>

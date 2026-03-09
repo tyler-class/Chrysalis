@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chrysalis · Sync History</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f9fafb;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --monarch-blue: #2563eb;
+      --accent: var(--monarch-blue);
+      --green: #059669;
+      --red: #dc2626;
+      --yellow: #d97706;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      padding: 20px 24px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .nav {
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    .nav a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .nav a:hover { text-decoration: underline; }
+    h1 { font-size: 20px; font-weight: 600; margin: 0 0 8px 0; }
+    .sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .list { display: flex; flex-direction: column; gap: 0; }
+    .list-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      cursor: pointer;
+      background: var(--bg);
+      text-decoration: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      width: 100%;
+    }
+    .list-row:first-child { border-radius: 10px 10px 0 0; }
+    .list-row:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 10px 10px; }
+    .list-row:hover { background: var(--surface); }
+    .list-row .time { color: var(--muted); font-size: 13px; flex-shrink: 0; margin-left: 12px; }
+    .list-row .summary { font-weight: 500; }
+    .list-row .summary.ok { color: var(--green); }
+    .list-row .summary.fail { color: var(--red); }
+    .list-row .summary.warn { color: var(--yellow); }
+    .detail-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .detail-header .date { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .result-list { margin-top: 16px; }
+    .result-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .result-row.success { background: #ecfdf5; border-color: #a7f3d0; }
+    .result-row.fail { background: #fef2f2; border-color: #fecaca; }
+    .result-icon { font-weight: 700; flex-shrink: 0; }
+    .result-row.success .result-icon { color: var(--green); }
+    .result-row.fail .result-icon { color: var(--red); }
+    .result-body { flex: 1; min-width: 0; }
+    .result-pl-name { font-weight: 600; }
+    .result-detail { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .result-balance { font-weight: 600; flex-shrink: 0; }
+    .result-balance.positive { color: var(--green); }
+    .result-balance.negative { color: var(--red); }
+    .sync-details-section { margin-top: 20px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+    .sync-details-section h3 { margin: 0 0 10px 0; font-size: 13px; color: var(--accent); }
+    .sync-details-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .sync-details-table th { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .sync-details-table td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
+    .sync-details-table tr.success td:last-child { color: var(--green); }
+    .sync-details-table tr.fail td:last-child { color: var(--red); }
+    .empty { color: var(--muted); padding: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="sync-history.js"></script>
+</body>
+</html>
