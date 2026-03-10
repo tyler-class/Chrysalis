@@ -67,9 +67,10 @@ Paste it into the API key field in Chrysalis and click **Save Key**.
 Before you can map anything, Chrysalis needs to fetch your account lists from both services.
 
 1. Make sure you're logged into Monarch Money — have `app.monarchmoney.com` open in a tab
-2. Click **Load Accounts from Monarch**
-
-Chrysalis will fetch your Monarch accounts from the open tab, then briefly open ProjectionLab in the background to retrieve your account list from there as well. Both lists will populate automatically.
+2. Click **Load Accounts from Monarch**. You should see a success text underneath the button.
+3. Make sure you're logged into ProjectionLab in an open tab
+4. Click **Load Accoungs from ProjectionLab**. You should see a success text underneath the button.
+5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings will be preserved if you change the name of an account.
 
 > **Note:** If you see an error loading ProjectionLab accounts, make sure Plugins are enabled (Step 1) and that you're logged into ProjectionLab.
 
@@ -114,7 +115,7 @@ Once setup is complete, syncing is a one-step process:
 
 1. Navigate to `app.monarchmoney.com` in Chrome (and make sure you're logged in)
 2. Click the Chrysalis icon in your toolbar
-3. Click **↑ Sync to ProjectionLab**
+3. Click **Sync Now**
 
 <kbd><img src="screenshots/popup-ready-to-sync-first-time.png" width="400"></kbd>
 
@@ -260,44 +261,6 @@ When filing an issue, please include:
 - What error you saw (exact text)
 - Whether the Monarch web app itself was working normally at the time
 - Your Chrome version
-
-<hr style="border: none; height: 2px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
-
-## 📸 Adding screenshots
-
-Screenshots live in the `screenshots/` directory. To embed one inline in this README, use standard Markdown image syntax with a relative path:
-
-```markdown
-![Description of screenshot](screenshots/your-filename.png)
-```
-
-For example, to show the sync popup:
-
-```markdown
-![Sync popup](screenshots/SCR-20260309-mmqo.png)
-```
-
-To control display size (e.g. for a tall/narrow popup screenshot), use an HTML `<img>` tag instead:
-
-```html
-<img src="screenshots/SCR-20260309-mmqo.png" width="400" alt="Sync popup">
-```
-
-Current screenshots available in `screenshots/`:
-
-| File | Use it for |
-|------|-----------|
-| `SCR-20260309-mmme.png` | *(describe what this shows)* |
-| `SCR-20260309-mmpa.png` | *(describe what this shows)* |
-| `SCR-20260309-mmqo.png` | *(describe what this shows)* |
-| `SCR-20260309-mnwz.png` | *(describe what this shows)* |
-| `SCR-20260309-moaq.png` | *(describe what this shows)* |
-| `SCR-20260309-mocb.png` | *(describe what this shows)* |
-| `SCR-20260309-modq.png` | *(describe what this shows)* |
-| `SCR-20260309-mofn.png` | *(describe what this shows)* |
-| `SCR-20260309-moha.png` | *(describe what this shows)* |
-
-Fill in the descriptions as you drop screenshots into context — GitHub renders them inline wherever you place the tag.
 
 <hr style="border: none; height: 2px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
 
