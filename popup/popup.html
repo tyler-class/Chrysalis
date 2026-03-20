@@ -308,6 +308,21 @@
     .last-sync-card.collapsed .last-sync-body {
       display: none;
     }
+    .coffee-footer {
+      text-align: center;
+      padding: 8px 0 10px;
+      border-top: 1px solid #e5e7eb;
+      margin-top: 12px;
+    }
+    .coffee-footer a {
+      font-size: 11px;
+      color: #9ca3af;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .coffee-footer a:hover {
+      color: #fd6b2f;
+    }
   </style>
 </head>
 <body>
@@ -325,6 +340,9 @@
       <span id="status-text">Loading…</span>
     </div>
     <div id="content"></div>
+    <div class="coffee-footer">
+      <a href="https://ko-fi.com/YOUR_KOFI_USERNAME" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
