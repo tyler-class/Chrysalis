@@ -4,38 +4,32 @@
 
 **Sync Monarch Money balances to ProjectionLab.**
 
-Chrysalis is a Chrome extension that pulls your live account balances from Monarch Money and pushes them into ProjectionLab with one click. No scripts, no terminal, no copy-pasting numbers by hand.
+Chrysalis is a Chrome extension that pulls your live account balances from Monarch Money and pushes them into ProjectionLab with one click. No scripts, no terminal, no copy-pasting numbers by hand. 
 
-<hr style="border: none; height: 2px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
+Chrysalis is, and will always be, **free** to use. But if you want to say thank you, <a href="https://ko-fi.com/tylerclass">coffee is my love language</a>.
 
-## 🤔 Why Chrysalis exists
+<hr style="border: none; height: 3px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
 
-ProjectionLab is a powerful financial planning tool, but it only knows what you tell it. Monarch Money knows exactly what your accounts are worth right now. Chrysalis connects the two — your plan stays grounded in your actual balances without any manual data entry.
+## 🤔 Why Chrysalis?
 
-The existing workaround requires running a Node.js script from the terminal, manually editing a JSON config file, and pasting generated code into your browser console every time you want to update. It also broke in early 2025 when Monarch added email verification to their login flow. Chrysalis replaces all of that with a button. There is also another Chrome extension that is a bit more limited in features. 
+ProjectionLab is a powerful financial planning tool, but it need an accurate starting point for projections. Monarch Money knows exactly what your accounts are worth. Chrysalis serves as the bridge between the two, so your plan stays grounded in your actual balances without manual data entry.
 
-My goal with Chrysalis is to make a full-featured, polished integration between Monarch and ProjectionLab.
+There are a couple of workarounds floating around the internet, but they had various issues and I wanted a full-service product experience... so I built it. My goal with Chrysalis is to make a full-featured, polished integration between Monarch and ProjectionLab. 
 
 <hr style="border: none; height: 2px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
 
 ## ✅ Requirements
 
-- Google Chrome (or any Chromium-based browser)
+- Google Chrome or a Chromium browser (I like Dia)
 - A [Monarch Money](https://monarchmoney.com) account
 - A [ProjectionLab](https://projectionlab.com) account with Plugins enabled
-- Your accounts must already exist in ProjectionLab before syncing. (Chrysalis updates balances, it does not create accounts.)
+- Your accounts must already exist in ProjectionLab (Chrysalis updatesPL  balances, it cannot create accounts)
 
 <hr style="border: none; height: 2px; background: linear-gradient(to right, #F97316, #2563EB); margin: 24px 0;">
 
 ## 📦 Installation
 
-Chrysalis is not yet on the Chrome Web Store. Install it directly from the source:
-
-1. Download or clone this repository and unzip it somewhere on your machine
-2. Open Chrome and go to `chrome://extensions`
-3. Enable **Developer mode** using the toggle in the top-right corner
-4. Click **Load unpacked**
-5. Select the folder you unzipped
+Chrysalis is <a href="https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood">available one Google Chrome Web Store</a>. Just click "Add to Chrome" to get started.
 
 The Chrysalis icon will appear in your Chrome toolbar. Pin it for easy access.
 
@@ -66,13 +60,11 @@ Paste it into the API key field in Chrysalis and click **Save Key**.
 
 Before you can map anything, Chrysalis needs to fetch your account lists from both services.
 
-1. Make sure you're logged into Monarch Money — have `app.monarchmoney.com` open in a tab
-2. Click **Load Accounts from Monarch**. You should see a success text underneath the button.
+1. Make sure you're logged into Monarch Money. Have `app.monarchmoney.com` open in a tab
+2. Click **Load Accounts from Monarch**. You should see success text underneath the button
 3. Make sure you're logged into ProjectionLab in an open tab
-4. Click **Load Accoungs from ProjectionLab**. You should see a success text underneath the button.
-5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings will be preserved if you change the name of an account.
-
-> **Note:** If you see an error loading ProjectionLab accounts, make sure Plugins are enabled (Step 1) and that you're logged into ProjectionLab.
+4. Click **Load Accoungs from ProjectionLab**. You should see success text underneath the button
+5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings are keyed by ID and will be preserved even if you change the name of an account.
 
 ### Step 3 — Map your accounts
 
@@ -96,15 +88,15 @@ To add a mapping:
 
 Mappings are saved automatically. When a row is completed, a green checkbox appears on the right indicating it has been saved. When all ProjectionLab accounts have been mapped, a green success message appears at the bottom of the section and the "Add ProjectionLab account mapping" button is hidden.
 
-You do not need to map every account — only the ones you want Chrysalis to manage.
+You are not required to map every account, only map the ones you want Chrysalis to sync.
 
-When your setup is complete, you'll see visual feedback indicating each section is done, as below:
+When your setup is complete, you'll see green visual feedback indicating each section is done, as below:
 
 <kbd><img src="screenshots/setup-configured.png" width="600"></kbd>
 
-**Special mapping for assets**: Monarch and ProjectionLab work differently in terms of how the data is structured for various types of assets (real estate, cars, motorcycles, jewelry, precious metals, etc.). Monarch stores an asset's value and a loan against that asset as 2 separate accounts, while ProjectionLab has both the value of an asset and a loan against an asset in 1 account. This is fully supported. 
+**Special mapping for assets**: Monarch and ProjectionLab work differently in terms of how the data is structured for various types of assets (real estate, cars, motorcycles, jewelry, precious metals, etc.). Monarch stores an asset's value and a loan against that asset as *2 separate accounts*, while ProjectionLab has both the value of an asset and a loan against an asset in *1 account*. Don't fret, the mapping of this kind if asset is **fully supported**. 
 
-When you select a ProjectionLab account that is one of these asset types, the row changes to a 2-lane layout that supports both the Asset and the Loan amount for that ProjectionLab account. On the Monarch side, you choose the Asset and Loan accounts individually. When synced to ProjectionLab, the Asset and Loan amounts from the 2 separate Monarch accounts are automatically merged into the 1 ProjectionLab account in the correct target fields.
+When you select a ProjectionLab account that is one of these asset types, the row switches to a 2-lane layout that supports both the Asset and the Loan amount for that ProjectionLab account. On the Monarch side, you choose the Asset and Loan accounts individually. When synced to ProjectionLab, the Asset and Loan amounts from the 2 separate Monarch accounts are automatically merged into the 1 ProjectionLab account in the correct target fields.
 
 <kbd><img src="screenshots/mapping-asset-and-loan.png" width="600"></kbd>
 
