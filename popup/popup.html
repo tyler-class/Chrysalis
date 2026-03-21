@@ -308,11 +308,31 @@
     .last-sync-card.collapsed .last-sync-body {
       display: none;
     }
-    .coffee-footer {
-      text-align: center;
-      padding: 8px 0 10px;
-      border-top: 1px solid #e5e7eb;
+    .popup-footer {
+      display: flex;
+      align-items: center;
       margin-top: 12px;
+      border-top: 1px solid #e5e7eb;
+      padding: 8px 12px 10px;
+      gap: 8px;
+    }
+    .popup-footer-spacer {
+      flex: 1;
+      min-width: 0;
+    }
+    .coffee-footer {
+      flex: 0 0 auto;
+      text-align: center;
+      padding: 0;
+      margin: 0;
+      border: none;
+    }
+    .popup-footer-actions {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
     }
     .coffee-footer a {
       font-size: 11px;
@@ -322,6 +342,30 @@
     }
     .coffee-footer a:hover {
       color: #fd6b2f;
+    }
+    .help-icon-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+      flex-shrink: 0;
+    }
+    .help-icon-link:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--bg);
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
     }
   </style>
 </head>
@@ -340,8 +384,21 @@
       <span id="status-text">Loading…</span>
     </div>
     <div id="content"></div>
-    <div class="coffee-footer">
-      <a href="https://ko-fi.com/tylerclass" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+    <div class="popup-footer">
+      <div class="popup-footer-spacer" aria-hidden="true"></div>
+      <div class="coffee-footer">
+        <a href="https://ko-fi.com/tylerclass" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee</a>
+      </div>
+      <div class="popup-footer-actions">
+        <a
+          href="https://github.com/tyler-class/Chrysalis#readme"
+          class="help-icon-link"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Need help?"
+          aria-label="Need help? Open documentation on GitHub"
+        >?</a>
+      </div>
     </div>
   </div>
   <script src="popup.js"></script>

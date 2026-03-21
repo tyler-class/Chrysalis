@@ -50,8 +50,38 @@
       display: block;
     }
     .header h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--text); }
-    .setup-page-link { margin-left: auto; font-size: 14px; color: var(--accent); text-decoration: none; }
+    .header-links {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .setup-page-link { font-size: 14px; color: var(--accent); text-decoration: none; }
     .setup-page-link:hover { text-decoration: underline; }
+    .help-icon-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+      flex-shrink: 0;
+    }
+    .help-icon-link:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--bg);
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
+    }
     .header-desc { color: var(--muted); margin: 0 0 24px 58px; font-size: 14px; }
     .chips {
       display: flex;
@@ -576,7 +606,17 @@
     <div class="header">
       <img src="" alt="Chrysalis" class="logo" id="header-logo" />
       <h1>Chrysalis · Setup</h1>
-      <a href="" id="setup-sync-history-link" target="_blank" rel="noopener noreferrer" class="setup-page-link">Sync history</a>
+      <div class="header-links">
+        <a href="" id="setup-sync-history-link" target="_blank" rel="noopener noreferrer" class="setup-page-link">View History</a>
+        <a
+          href="https://github.com/tyler-class/Chrysalis#readme"
+          class="help-icon-link"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Need help?"
+          aria-label="Need help? Open documentation on GitHub"
+        >?</a>
+      </div>
     </div>
     <p class="header-desc">Configure your API key and map Monarch accounts to ProjectionLab accounts.</p>
 
