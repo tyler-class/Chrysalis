@@ -11,6 +11,8 @@
   if (logo) logo.src = chrome.runtime.getURL('icons/logo-full.jpg');
 
   const MONARCH_ORIGIN = 'https://app.monarch.com';
+  const CHROME_WEB_STORE_REVIEWS_URL =
+    'https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood/reviews';
   const CURRENCY_FMT = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -117,7 +119,16 @@
     `;
   }
 
-  function renderResults(results, lastSyncTime, topError, lastSyncDebug, showDebugOnPopup = true, syncHistory = [], isNewRun = false) {
+  function renderResults(
+    results,
+    lastSyncTime,
+    topError,
+    lastSyncDebug,
+    showDebugOnPopup = true,
+    syncHistory = [],
+    isNewRun = false,
+    ratingPromptDismissed = false
+  ) {
     const ok = results.every((r) => r.success);
     const anySuccess = results.some((r) => r.success);
     const total = results.length;
@@ -238,6 +249,17 @@
       </div>`
       : '';
 
+    const ratingBanner =
+      anySuccess && !ratingPromptDismissed
+        ? `<div class="rating-prompt" id="webstore-rating-prompt" role="status">
+        <div>Loving Chrysalis? A quick rating on the Chrome Web Store helps others find it.</div>
+        <div class="rating-prompt-actions">
+          <a href="${CHROME_WEB_STORE_REVIEWS_URL}" target="_blank" rel="noopener noreferrer" class="rating-prompt-store-link">Rate on Chrome Web Store</a>
+          <button type="button" class="rating-prompt-dismiss" id="dismiss-webstore-rating-prompt">Dismiss</button>
+        </div>
+      </div>`
+        : '';
+
     const lastSyncSection = results && results.length
       ? `
       <div class="last-sync-card ${isNewRun ? '' : 'collapsed'}" id="last-sync-card" aria-expanded="${isNewRun ? 'true' : 'false'}">
@@ -262,9 +284,27 @@
         <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn">Sync Now</button>
       </div>
       ${lastSyncSection}
+      ${ratingBanner}
       ${syncHistorySection}
     `;
     contentEl.querySelector('#sync-btn').onclick = () => runSync();
+
+    const dismissRating = document.getElementById('dismiss-webstore-rating-prompt');
+    if (dismissRating) {
+      dismissRating.onclick = async () => {
+        await chrome.storage.local.set({ webstoreRatingPromptDismissed: true });
+        renderResults(
+          results,
+          lastSyncTime,
+          topError,
+          lastSyncDebug,
+          showDebugOnPopup,
+          syncHistory,
+          false,
+          true
+        );
+      };
+    }
 
     // Setup collapse/expand behavior for Last sync section
     const lastCard = document.getElementById('last-sync-card');
@@ -313,11 +353,26 @@
     try {
       const res = await chrome.runtime.sendMessage({ type: 'RUN_SYNC', tabId: currentTabId });
       const [local, syncPref] = await Promise.all([
-        chrome.storage.local.get(['lastSyncTime', 'lastSyncResults', 'lastSyncDebug', 'syncHistory']),
+        chrome.storage.local.get([
+          'lastSyncTime',
+          'lastSyncResults',
+          'lastSyncDebug',
+          'syncHistory',
+          'webstoreRatingPromptDismissed',
+        ]),
         chrome.storage.sync.get(['showDebugOnPopup']),
       ]);
       if (res.results && res.results.length) {
-        renderResults(res.results, local.lastSyncTime || Date.now(), res.error, local.lastSyncDebug, !!syncPref.showDebugOnPopup, local.syncHistory || [], true);
+        renderResults(
+          res.results,
+          local.lastSyncTime || Date.now(),
+          res.error,
+          local.lastSyncDebug,
+          !!syncPref.showDebugOnPopup,
+          local.syncHistory || [],
+          true,
+          !!local.webstoreRatingPromptDismissed
+        );
       } else {
         setStatus('gray', res.error || 'Sync failed');
         contentEl.innerHTML = `
@@ -349,7 +404,13 @@
     currentTabId = tab?.id ?? null;
 
     const sync = await chrome.storage.sync.get(['plApiKey', 'accountMappings', 'showDebugOnPopup']);
-    const local = await chrome.storage.local.get(['lastSyncTime', 'lastSyncResults', 'lastSyncDebug', 'syncHistory']);
+    const local = await chrome.storage.local.get([
+      'lastSyncTime',
+      'lastSyncResults',
+      'lastSyncDebug',
+      'syncHistory',
+      'webstoreRatingPromptDismissed',
+    ]);
     const plApiKey = sync.plApiKey;
     const mappings = normalizeMappings(sync.accountMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
@@ -367,7 +428,16 @@
     }
 
     if (local.lastSyncResults && local.lastSyncResults.length > 0) {
-      renderResults(local.lastSyncResults, local.lastSyncTime, undefined, local.lastSyncDebug, !!sync.showDebugOnPopup, local.syncHistory || [], false);
+      renderResults(
+        local.lastSyncResults,
+        local.lastSyncTime,
+        undefined,
+        local.lastSyncDebug,
+        !!sync.showDebugOnPopup,
+        local.syncHistory || [],
+        false,
+        !!local.webstoreRatingPromptDismissed
+      );
       return;
     }
 
