@@ -232,7 +232,7 @@
       ? `<div class="sync-history-block" style="margin-top:16px">
         <div class="sync-history-header">
           <h3 class="sync-history-title">Sync History</h3>
-          <a href="${historyPageUrl}" target="_blank" rel="noopener noreferrer" class="sync-history-open-link">Open sync history</a>
+          <a href="${historyPageUrl}" target="_blank" rel="noopener noreferrer" class="sync-history-open-link">View History</a>
         </div>
         <div class="sync-history-rows">${historyRows}</div>
       </div>`
