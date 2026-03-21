@@ -367,6 +367,46 @@
       background: var(--bg);
       box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
     }
+    .rating-prompt {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: var(--gradient-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .rating-prompt-actions {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .rating-prompt-store-link {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .rating-prompt-store-link:hover {
+      text-decoration: underline;
+    }
+    .rating-prompt-dismiss {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: underline;
+    }
+    .rating-prompt-dismiss:hover {
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
