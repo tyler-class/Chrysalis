@@ -483,12 +483,32 @@ async function runSyncWithTabId(tabId) {
     const byPlId = new Map(plResults.map((r) => [r.plId, r]));
     const payloadByPlId = new Map(updatesWithPayload.map((u) => [u.plId, u.data]));
 
+    // Tally which updateAccount call shapes succeeded this run so the service
+    // worker console and the persisted sync history both make it visible.
+    // This is how we'll learn which EA signature wins without the user having
+    // to keep DevTools attached across a service-worker sleep.
+    const callFormTally = {};
+    for (const pr of plResults) {
+      const form = pr && pr.debug && pr.debug.callForm;
+      if (form) callFormTally[form] = (callFormTally[form] || 0) + 1;
+    }
+    try {
+      console.log(
+        '[Chrysalis] sync result:',
+        plResults.filter((r) => r.success).length + '/' + plResults.length,
+        'updated. Call forms used:',
+        callFormTally,
+        'Method:', lastSyncMethod
+      );
+    } catch (_) {}
+
     for (const r of results) {
       if (r.plId == null) continue;
       const pr = byPlId.get(r.plId);
       if (pr) {
         r.success = pr.success;
         if (!pr.success && pr.error) r.error = pr.error;
+        if (pr.debug && pr.debug.callForm) r.callForm = pr.debug.callForm;
       }
     }
 
@@ -499,6 +519,7 @@ async function runSyncWithTabId(tabId) {
     const lastSyncDebug = {
       method: lastSyncMethod,
       plTabUrl: plTabUrl || undefined,
+      callFormTally: Object.keys(callFormTally).length ? callFormTally : undefined,
       updates: results
         .filter((r) => r.plId != null)
         .map((r) => ({
@@ -511,6 +532,7 @@ async function runSyncWithTabId(tabId) {
             accountId: String(r.plId),
             ...(payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance)),
           },
+          callForm: r.callForm || undefined,
           success: r.success,
           error: r.error || null,
         })),
