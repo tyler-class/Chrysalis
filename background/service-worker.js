@@ -136,20 +136,59 @@ async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
       const out = [];
       const debugInfo = { lastRun: Date.now(), updateCount: updates.length, logs: [] };
       try { window.__monarchPlSyncDebug = debugInfo; } catch (_) {}
+      // Try multiple updateAccount call shapes to handle signature variation
+      // between app.* (positional: updateAccount(id, data, options)) and ea.*
+      // (which reports "Invalid accountId: must be a string" on positional calls,
+      // suggesting a single-object shape). We try the known-good positional form
+      // first, then two common object shapes, and return the first that succeeds.
+      const updateFn = window.projectionlabPluginAPI && window.projectionlabPluginAPI.updateAccount;
       for (const u of updates) {
         try {
-          if (typeof window.projectionlabPluginAPI === 'undefined' || typeof window.projectionlabPluginAPI.updateAccount !== 'function') {
+          if (typeof updateFn !== 'function') {
             out.push({ plId: u.plId, success: false, error: 'Plugin API or updateAccount not available' });
             continue;
           }
           const data = u.data || { balance: Number(u.balance) };
-          // PL strictly validates accountId as a string. EA's API returns
-          // numeric IDs for some account categories, so coerce defensively
-          // so both existing (numeric) mappings and future (string) ones work.
+          // PL validates accountId strictly. EA returns numeric IDs for at
+          // least some categories, so coerce defensively.
           const accountId = String(u.plId);
           debugInfo.logs.push({ plId: accountId, data, t: Date.now() });
-          const returnValue = await window.projectionlabPluginAPI.updateAccount(accountId, data, options);
-          out.push({ plId: u.plId, success: true, debug: { data, returnValue } });
+
+          const callForms = [
+            { name: 'positional', args: [accountId, data, options] },
+            { name: 'object+options', args: [{ accountId: accountId, ...data }, options] },
+            { name: 'single-object', args: [{ accountId: accountId, key: options.key, force: options.force, ...data }] },
+          ];
+          let returnValue;
+          let usedForm = null;
+          let lastErr = null;
+          for (const form of callForms) {
+            try {
+              returnValue = await updateFn.apply(window.projectionlabPluginAPI, form.args);
+              usedForm = form.name;
+              lastErr = null;
+              break;
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+          if (usedForm) {
+            out.push({ plId: u.plId, success: true, debug: { callForm: usedForm, accountId, data, returnValue } });
+          } else {
+            // All call shapes failed. Include the updateAccount function source so we can
+            // see the real signature and add a matching form on the next iteration.
+            let fnSrc = '';
+            try {
+              fnSrc = typeof updateFn.toString === 'function' ? updateFn.toString().slice(0, 400) : '';
+            } catch (_) {}
+            const fnLen = typeof updateFn.length === 'number' ? updateFn.length : -1;
+            const baseMsg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+            out.push({
+              plId: u.plId,
+              success: false,
+              error: `${baseMsg} | tried all call forms | updateFn.length=${fnLen} | updateFn.src=${fnSrc}`,
+            });
+          }
         } catch (e) {
           out.push({ plId: u.plId, success: false, error: e.message || String(e) });
         }
@@ -466,7 +505,12 @@ async function runSyncWithTabId(tabId) {
           plName: r.plName,
           plId: r.plId,
           balance: r.aggregatedBalance,
-          payload: payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance),
+          // Include accountId in the payload display so the debug column shows
+          // the full set of fields being sent to updateAccount, not just data.
+          payload: {
+            accountId: String(r.plId),
+            ...(payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance)),
+          },
           success: r.success,
           error: r.error || null,
         })),
