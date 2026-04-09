@@ -462,21 +462,20 @@ async function runSyncWithTabId(tabId) {
         // knows which instance to hit.
         try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
-        // No PL tab open — fall back to HTTP, but only against the cached origin.
-        // Guessing at random would risk posting an app.* user's updates to ea.* (or vice versa).
+        // No PL tab open — fall back to HTTP. Prefer the cached origin (set by
+        // a previous successful in-page sync or by setup's detectPLOrigin).
+        // If no cache exists, default to app.* to match legacy behavior — this
+        // protects existing app.* users whose extension has never written
+        // plOrigin (e.g. right after upgrading from a pre-EA version).
         const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
-        if (cachedOrigin && PL_ORIGINS.includes(cachedOrigin)) {
-          lastSyncMethod = `HTTP ${cachedOrigin} (no PL tab; see extension service worker Network)`;
-          for (const u of updatesWithPayload) {
-            const hr = await updateViaHttp(plApiKey, u.plId, u.data, cachedOrigin);
-            plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
-          }
-        } else {
-          lastSyncMethod = 'error: no PL tab and no cached instance';
-          const errMsg = 'No ProjectionLab tab open and no cached instance. Open Chrysalis setup once so we can detect your ProjectionLab instance (app.projectionlab.com or ea.projectionlab.com), or open a ProjectionLab tab before syncing.';
-          for (const u of updatesWithPayload) {
-            plResults.push({ plId: u.plId, success: false, error: errMsg });
-          }
+        const httpOrigin =
+          cachedOrigin && PL_ORIGINS.includes(cachedOrigin)
+            ? cachedOrigin
+            : 'https://app.projectionlab.com';
+        lastSyncMethod = `HTTP ${httpOrigin} (no PL tab; see extension service worker Network)`;
+        for (const u of updatesWithPayload) {
+          const hr = await updateViaHttp(plApiKey, u.plId, u.data, httpOrigin);
+          plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
         }
       }
     }
