@@ -4,9 +4,20 @@
  * Falls back to in-page API if HTTP is not available.
  */
 
-const PL_ORIGIN = 'https://app.projectionlab.com';
+// Supported ProjectionLab origins. Order matters: ea.* is preferred (EA gets
+// preferential treatment when both origins accept the same key). Setup probes
+// and HTTP-fallback both honor this order.
+const PL_ORIGINS = [
+  'https://ea.projectionlab.com',
+  'https://app.projectionlab.com',
+];
 const MONARCH_ORIGIN = 'https://app.monarch.com';
-const PL_UPDATE_HTTP_URL = 'https://app.projectionlab.com/api/plugin/updateAccount';
+function buildPLUpdateHttpUrl(origin) {
+  return origin + '/api/plugin/updateAccount';
+}
+function plOriginForUrl(url) {
+  return PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
+}
 const AUTO_SYNC_ALARM = 'chrysalis-auto-sync';
 
 /**
@@ -61,12 +72,24 @@ function buildPayloadAssetWithLoan(update) {
 }
 
 async function findPLTab() {
-  const tabs = await chrome.tabs.query({ url: PL_ORIGIN + '/*' });
+  const tabs = await chrome.tabs.query({ url: PL_ORIGINS.map((o) => o + '/*') });
   if (!tabs.length) return null;
+  const originIndex = (url) => {
+    const idx = PL_ORIGINS.findIndex((o) => typeof url === 'string' && url.startsWith(o));
+    return idx === -1 ? PL_ORIGINS.length : idx;
+  };
   const prefer = (t) => t.url && !t.url.includes('/docs') && !t.url.includes('/settings');
-  const sorted = [...tabs].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-  const main = sorted.find(prefer) || sorted.find(() => true);
-  return main || null;
+  // Primary sort: PL_ORIGINS order (ea.* before app.*). Secondary: most recently accessed.
+  const sorted = [...tabs].sort((a, b) => {
+    const ai = originIndex(a.url);
+    const bi = originIndex(b.url);
+    if (ai !== bi) return ai - bi;
+    return (b.lastAccessed || 0) - (a.lastAccessed || 0);
+  });
+  const main = sorted.find(prefer) || sorted[0];
+  if (!main) return null;
+  const origin = plOriginForUrl(main.url) || PL_ORIGINS[0];
+  return { tab: main, origin };
 }
 
 async function findMonarchTab() {
@@ -80,9 +103,11 @@ async function findMonarchTab() {
  * Update one account via HTTP. Sends force: true so the server skips the "property must exist on account" check
  * (same as in-page options.force — allows assigning balance/balanceType or amount/amountType even if strict check would fail).
  */
-async function updateViaHttp(apiKey, plId, data) {
-  const body = { accountId: plId, key: apiKey, force: true, ...data };
-  const res = await fetch(PL_UPDATE_HTTP_URL, {
+async function updateViaHttp(apiKey, plId, data, origin) {
+  // Coerce accountId to string — PL validates strictly, and EA can return
+  // numeric IDs that got persisted into the mapping as numbers.
+  const body = { accountId: String(plId), key: apiKey, force: true, ...data };
+  const res = await fetch(buildPLUpdateHttpUrl(origin), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -111,16 +136,59 @@ async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
       const out = [];
       const debugInfo = { lastRun: Date.now(), updateCount: updates.length, logs: [] };
       try { window.__monarchPlSyncDebug = debugInfo; } catch (_) {}
+      // Try multiple updateAccount call shapes to handle signature variation
+      // between app.* (positional: updateAccount(id, data, options)) and ea.*
+      // (which reports "Invalid accountId: must be a string" on positional calls,
+      // suggesting a single-object shape). We try the known-good positional form
+      // first, then two common object shapes, and return the first that succeeds.
+      const updateFn = window.projectionlabPluginAPI && window.projectionlabPluginAPI.updateAccount;
       for (const u of updates) {
         try {
-          if (typeof window.projectionlabPluginAPI === 'undefined' || typeof window.projectionlabPluginAPI.updateAccount !== 'function') {
+          if (typeof updateFn !== 'function') {
             out.push({ plId: u.plId, success: false, error: 'Plugin API or updateAccount not available' });
             continue;
           }
           const data = u.data || { balance: Number(u.balance) };
-          debugInfo.logs.push({ plId: u.plId, data, t: Date.now() });
-          const returnValue = await window.projectionlabPluginAPI.updateAccount(u.plId, data, options);
-          out.push({ plId: u.plId, success: true, debug: { data, returnValue } });
+          // PL validates accountId strictly. EA returns numeric IDs for at
+          // least some categories, so coerce defensively.
+          const accountId = String(u.plId);
+          debugInfo.logs.push({ plId: accountId, data, t: Date.now() });
+
+          const callForms = [
+            { name: 'positional', args: [accountId, data, options] },
+            { name: 'object+options', args: [{ accountId: accountId, ...data }, options] },
+            { name: 'single-object', args: [{ accountId: accountId, key: options.key, force: options.force, ...data }] },
+          ];
+          let returnValue;
+          let usedForm = null;
+          let lastErr = null;
+          for (const form of callForms) {
+            try {
+              returnValue = await updateFn.apply(window.projectionlabPluginAPI, form.args);
+              usedForm = form.name;
+              lastErr = null;
+              break;
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+          if (usedForm) {
+            out.push({ plId: u.plId, success: true, debug: { callForm: usedForm, accountId, data, returnValue } });
+          } else {
+            // All call shapes failed. Include the updateAccount function source so we can
+            // see the real signature and add a matching form on the next iteration.
+            let fnSrc = '';
+            try {
+              fnSrc = typeof updateFn.toString === 'function' ? updateFn.toString().slice(0, 400) : '';
+            } catch (_) {}
+            const fnLen = typeof updateFn.length === 'number' ? updateFn.length : -1;
+            const baseMsg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+            out.push({
+              plId: u.plId,
+              success: false,
+              error: `${baseMsg} | tried all call forms | updateFn.length=${fnLen} | updateFn.src=${fnSrc}`,
+            });
+          }
         } catch (e) {
           out.push({ plId: u.plId, success: false, error: e.message || String(e) });
         }
@@ -384,21 +452,55 @@ async function runSyncWithTabId(tabId) {
     let lastSyncMethod = 'none';
     let plTabUrl = null;
     if (updatesToRun.length > 0) {
-      const plTab = await findPLTab();
-      if (plTab) {
+      const found = await findPLTab();
+      if (found) {
+        const { tab: plTab, origin } = found;
         lastSyncMethod = 'in-page (PL tab)';
         plTabUrl = plTab.url || null;
         plResults = await runPLUpdatesInTab(plTab.id, updatesWithPayload, plApiKey);
+        // Persist the origin we just synced against so HTTP fallback on future runs
+        // knows which instance to hit.
+        try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
-        lastSyncMethod = 'HTTP (no PL tab; see extension service worker Network)';
-        for (const u of updatesWithPayload) {
-          const hr = await updateViaHttp(plApiKey, u.plId, u.data);
-          plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
+        // No PL tab open — fall back to HTTP, but only against the cached origin.
+        // Guessing at random would risk posting an app.* user's updates to ea.* (or vice versa).
+        const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
+        if (cachedOrigin && PL_ORIGINS.includes(cachedOrigin)) {
+          lastSyncMethod = `HTTP ${cachedOrigin} (no PL tab; see extension service worker Network)`;
+          for (const u of updatesWithPayload) {
+            const hr = await updateViaHttp(plApiKey, u.plId, u.data, cachedOrigin);
+            plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
+          }
+        } else {
+          lastSyncMethod = 'error: no PL tab and no cached instance';
+          const errMsg = 'No ProjectionLab tab open and no cached instance. Open Chrysalis setup once so we can detect your ProjectionLab instance (app.projectionlab.com or ea.projectionlab.com), or open a ProjectionLab tab before syncing.';
+          for (const u of updatesWithPayload) {
+            plResults.push({ plId: u.plId, success: false, error: errMsg });
+          }
         }
       }
     }
     const byPlId = new Map(plResults.map((r) => [r.plId, r]));
     const payloadByPlId = new Map(updatesWithPayload.map((u) => [u.plId, u.data]));
+
+    // Tally which updateAccount call shapes succeeded this run so the service
+    // worker console and the persisted sync history both make it visible.
+    // This is how we'll learn which EA signature wins without the user having
+    // to keep DevTools attached across a service-worker sleep.
+    const callFormTally = {};
+    for (const pr of plResults) {
+      const form = pr && pr.debug && pr.debug.callForm;
+      if (form) callFormTally[form] = (callFormTally[form] || 0) + 1;
+    }
+    try {
+      console.log(
+        '[Chrysalis] sync result:',
+        plResults.filter((r) => r.success).length + '/' + plResults.length,
+        'updated. Call forms used:',
+        callFormTally,
+        'Method:', lastSyncMethod
+      );
+    } catch (_) {}
 
     for (const r of results) {
       if (r.plId == null) continue;
@@ -406,6 +508,7 @@ async function runSyncWithTabId(tabId) {
       if (pr) {
         r.success = pr.success;
         if (!pr.success && pr.error) r.error = pr.error;
+        if (pr.debug && pr.debug.callForm) r.callForm = pr.debug.callForm;
       }
     }
 
@@ -416,13 +519,20 @@ async function runSyncWithTabId(tabId) {
     const lastSyncDebug = {
       method: lastSyncMethod,
       plTabUrl: plTabUrl || undefined,
+      callFormTally: Object.keys(callFormTally).length ? callFormTally : undefined,
       updates: results
         .filter((r) => r.plId != null)
         .map((r) => ({
           plName: r.plName,
           plId: r.plId,
           balance: r.aggregatedBalance,
-          payload: payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance),
+          // Include accountId in the payload display so the debug column shows
+          // the full set of fields being sent to updateAccount, not just data.
+          payload: {
+            accountId: String(r.plId),
+            ...(payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance)),
+          },
+          callForm: r.callForm || undefined,
           success: r.success,
           error: r.error || null,
         })),
