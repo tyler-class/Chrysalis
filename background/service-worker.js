@@ -104,7 +104,9 @@ async function findMonarchTab() {
  * (same as in-page options.force — allows assigning balance/balanceType or amount/amountType even if strict check would fail).
  */
 async function updateViaHttp(apiKey, plId, data, origin) {
-  const body = { accountId: plId, key: apiKey, force: true, ...data };
+  // Coerce accountId to string — PL validates strictly, and EA can return
+  // numeric IDs that got persisted into the mapping as numbers.
+  const body = { accountId: String(plId), key: apiKey, force: true, ...data };
   const res = await fetch(buildPLUpdateHttpUrl(origin), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -141,8 +143,12 @@ async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
             continue;
           }
           const data = u.data || { balance: Number(u.balance) };
-          debugInfo.logs.push({ plId: u.plId, data, t: Date.now() });
-          const returnValue = await window.projectionlabPluginAPI.updateAccount(u.plId, data, options);
+          // PL strictly validates accountId as a string. EA's API returns
+          // numeric IDs for some account categories, so coerce defensively
+          // so both existing (numeric) mappings and future (string) ones work.
+          const accountId = String(u.plId);
+          debugInfo.logs.push({ plId: accountId, data, t: Date.now() });
+          const returnValue = await window.projectionlabPluginAPI.updateAccount(accountId, data, options);
           out.push({ plId: u.plId, success: true, debug: { data, returnValue } });
         } catch (e) {
           out.push({ plId: u.plId, success: false, error: e.message || String(e) });
