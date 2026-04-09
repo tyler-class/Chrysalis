@@ -3,13 +3,39 @@
  */
 
 (function () {
-  const PL_ORIGIN = 'https://app.projectionlab.com';
+  // Supported ProjectionLab origins. Order matters: ea.* is probed first
+  // (EA gets preferential treatment; see detectPLOrigin).
+  const PL_ORIGINS = [
+    'https://ea.projectionlab.com',
+    'https://app.projectionlab.com',
+  ];
+  const DEFAULT_PL_ORIGIN = PL_ORIGINS[0];
   const MONARCH_ORIGIN = 'https://app.monarch.com';
   const PL_LOAD_DELAY_MS = 4500;
   const PL_API_RETRY_MS = 2000;
   const PL_API_RETRIES = 5;
   const PL_WAIT_FOR_API_MS = 20000;
   const PL_WAIT_POLL_MS = 400;
+
+  function plOriginForUrl(url) {
+    return PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
+  }
+  async function getCachedPLOrigin() {
+    const { plOrigin } = await chrome.storage.local.get(['plOrigin']);
+    return plOrigin && PL_ORIGINS.includes(plOrigin) ? plOrigin : null;
+  }
+  async function setCachedPLOrigin(origin) {
+    if (origin && PL_ORIGINS.includes(origin)) {
+      await chrome.storage.local.set({ plOrigin: origin });
+    }
+  }
+  async function clearCachedPLOrigin() {
+    try { await chrome.storage.local.remove(['plOrigin']); } catch (_) {}
+  }
+  function isAuthLikeError(message) {
+    if (!message) return false;
+    return /unauthor|invalid.*key|forbidden|401|403/i.test(String(message));
+  }
 
   let monarchAccounts = [];
   let plAccounts = [];
@@ -516,6 +542,9 @@
     if (!key) return;
     plApiKey = key;
     await chrome.storage.sync.set({ plApiKey: key });
+    // A saved key may belong to a different instance than the previously cached
+    // one — drop the cache so the next "Load Accounts" re-runs detection.
+    await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', true);
     setFinalLoadStatus(document.getElementById('key-saved-msg'), 'Key saved!');
@@ -525,6 +554,7 @@
     document.getElementById('pl-key').value = '';
     plApiKey = '';
     await chrome.storage.sync.remove('plApiKey');
+    await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', false);
     setStepCollapsed('step1', false);
@@ -537,19 +567,25 @@
   }
 
   function isPLAppTab(url) {
-    if (!url || !url.startsWith(PL_ORIGIN)) return false;
-    const path = url.slice(PL_ORIGIN.length).split('?')[0];
+    const origin = plOriginForUrl(url);
+    if (!origin) return false;
+    const path = url.slice(origin.length).split('?')[0];
     return path === '' || path === '/' || (!path.startsWith('/docs') && !path.startsWith('/settings'));
   }
 
-  async function findOrOpenPLTab() {
-    const tabs = await chrome.tabs.query({ url: PL_ORIGIN + '/*' });
+  /**
+   * Find an existing tab for the given origin, or open one in the background.
+   * Returns { tab, openedByUs }. openedByUs=true means we created the tab and
+   * the caller is responsible for closing it on failure.
+   */
+  async function findOrOpenPLTabForOrigin(origin, { openInBackground = false } = {}) {
+    const tabs = await chrome.tabs.query({ url: origin + '/*' });
     if (tabs.length) {
       const appTab = tabs.find((t) => isPLAppTab(t.url));
-      return appTab || tabs[0];
+      return { tab: appTab || tabs[0], openedByUs: false };
     }
-    const tab = await chrome.tabs.create({ url: PL_ORIGIN + '/', active: false });
-    return new Promise((resolve) => {
+    const tab = await chrome.tabs.create({ url: origin + '/', active: !openInBackground });
+    const loaded = await new Promise((resolve) => {
       const listener = (id, info, t) => {
         if (id !== tab.id) return;
         if (info.status === 'complete') {
@@ -563,6 +599,110 @@
         setTimeout(() => resolve(tab), PL_LOAD_DELAY_MS);
       }
     });
+    return { tab: loaded, openedByUs: true };
+  }
+
+  /**
+   * Get a usable PL tab for diagnostic flows (diagnose, inspect schema) that
+   * don't have enough context to run full origin detection. Preference order:
+   *   1. Cached origin (the user's confirmed instance).
+   *   2. Any already-open PL tab, honoring PL_ORIGINS order (ea.* over app.*).
+   *   3. Open the default preferred origin (ea.*).
+   */
+  async function findAnyPLTabOrOpen({ openInBackground = false } = {}) {
+    const cached = await getCachedPLOrigin();
+    if (cached) {
+      const result = await findOrOpenPLTabForOrigin(cached, { openInBackground });
+      return { ...result, origin: cached };
+    }
+    for (const origin of PL_ORIGINS) {
+      const tabs = await chrome.tabs.query({ url: origin + '/*' });
+      if (tabs.length) {
+        const appTab = tabs.find((t) => isPLAppTab(t.url));
+        return { tab: appTab || tabs[0], openedByUs: false, origin };
+      }
+    }
+    const result = await findOrOpenPLTabForOrigin(DEFAULT_PL_ORIGIN, { openInBackground });
+    return { ...result, origin: DEFAULT_PL_ORIGIN };
+  }
+
+  /**
+   * Probe a single origin with the given API key to see if the key is valid there.
+   * Classifies errors into "fall through" (try the next origin) vs fatal (bubble up).
+   * Closes probe tabs we opened on failure; leaves successful probe tabs alive so
+   * the caller can reuse them.
+   */
+  async function probeOriginWithKey(origin, apiKey) {
+    let opened;
+    try {
+      opened = await findOrOpenPLTabForOrigin(origin, { openInBackground: true });
+    } catch (e) {
+      return { success: false, fallThrough: false, error: `Could not open ${origin}: ${e.message || String(e)}` };
+    }
+    const { tab, openedByUs } = opened;
+
+    let outcome;
+    try {
+      const scriptResults = await runPLExportScript(tab.id, apiKey);
+      const payload = scriptResults && scriptResults[0] && scriptResults[0].result;
+      if (!payload) {
+        outcome = { success: false, fallThrough: false, error: `Could not run script on ${origin} tab.` };
+      } else if (payload.error === 'not_ready') {
+        // Plugin API never appeared. If we opened the tab ourselves, treat this as
+        // "user has no account on this instance" (e.g. ea.* bounced them to sign-in)
+        // and fall through to the next origin. If the user already had this tab open,
+        // surface the existing "not ready" guidance.
+        outcome = {
+          success: false,
+          fallThrough: openedByUs,
+          error: `ProjectionLab plugin API not ready on ${origin}.`,
+        };
+      } else if (payload.error) {
+        try { console.log('[Chrysalis] detect probe error', origin, payload.error); } catch (_) {}
+        outcome = {
+          success: false,
+          fallThrough: isAuthLikeError(payload.error),
+          error: payload.error,
+        };
+      } else {
+        outcome = { success: true, accounts: payload.accounts || [], tab };
+      }
+    } catch (e) {
+      outcome = { success: false, fallThrough: false, error: e.message || String(e) };
+    }
+
+    if (!outcome.success && openedByUs && tab && tab.id != null) {
+      try { await chrome.tabs.remove(tab.id); } catch (_) {}
+    }
+    return outcome;
+  }
+
+  /**
+   * Detect which ProjectionLab instance the user's API key belongs to.
+   *   1. Cache hit → return immediately.
+   *   2. Probe each origin in PL_ORIGINS order (ea.* first). Fall through on
+   *      auth-shaped errors and on "plugin API not ready" for probe tabs we
+   *      opened ourselves. Surface all other errors immediately.
+   *   3. If every origin rejects the key, throw a combined auth error.
+   * On a cold-start probe success the accounts payload is carried back so the
+   * caller doesn't need a second exportData call.
+   */
+  async function detectPLOrigin(apiKey) {
+    const cached = await getCachedPLOrigin();
+    if (cached) return { origin: cached };
+    for (const origin of PL_ORIGINS) {
+      const probe = await probeOriginWithKey(origin, apiKey);
+      if (probe.success) {
+        await setCachedPLOrigin(origin);
+        return { origin, accounts: probe.accounts };
+      }
+      if (probe.fallThrough) continue;
+      throw new Error(probe.error || 'Unknown ProjectionLab error');
+    }
+    const hostList = PL_ORIGINS.map((o) => o.replace('https://', '')).join(' or ');
+    throw new Error(
+      `Your ProjectionLab API key wasn't accepted by ${hostList}. Double-check the key and try again.`
+    );
   }
 
   function runPLExportScript(tabId, apiKey) {
@@ -600,7 +740,15 @@
   async function fetchPLAccounts() {
     const key = plApiKey && plApiKey.trim() ? plApiKey : (await chrome.storage.sync.get(['plApiKey'])).plApiKey;
     if (!key) throw new Error('Save your ProjectionLab API key first.');
-    const plTab = await findOrOpenPLTab();
+
+    // Detect which instance this key belongs to (or use cached origin).
+    // On a cold-start probe success, detection already ran exportData and
+    // returns the accounts payload directly — no second call needed.
+    const detection = await detectPLOrigin(key);
+    if (detection.accounts) return detection.accounts;
+
+    // Cache-hit path: origin is known, run the export against its tab.
+    const { tab: plTab } = await findOrOpenPLTabForOrigin(detection.origin);
     for (let attempt = 1; attempt <= PL_API_RETRIES; attempt++) {
       const results = await runPLExportScript(plTab.id, key);
       const payload = results && results[0] && results[0].result;
@@ -611,10 +759,15 @@
           continue;
         }
         throw new Error(
-          'ProjectionLab plugin API not ready. Use a tab on the main app (e.g. app.projectionlab.com or your plan/dashboard), not the Plugins settings page. Sign in, enable Plugins in Account Settings if needed, then open your plan or dashboard and try again.'
+          'ProjectionLab plugin API not ready. Use a tab on the main app (your plan or dashboard at app.projectionlab.com or ea.projectionlab.com), not the Plugins settings page. Sign in, enable Plugins in Account Settings if needed, then open your plan or dashboard and try again.'
         );
       }
-      if (payload.error) throw new Error(payload.error);
+      if (payload.error) {
+        // Auth failure in the cached-origin path means the key was revoked
+        // or the user moved instances — drop the cache so the next click re-probes.
+        if (isAuthLikeError(payload.error)) await clearCachedPLOrigin();
+        throw new Error(payload.error);
+      }
       return payload.accounts || [];
     }
     return [];
@@ -799,7 +952,7 @@
     wrap.style.display = 'block';
     out.textContent = 'Checking ProjectionLab tab…';
     try {
-      const plTab = await findOrOpenPLTab();
+      const { tab: plTab } = await findAnyPLTabOrOpen();
       const results = await chrome.scripting.executeScript({
         target: { tabId: plTab.id },
         world: 'MAIN',
@@ -828,7 +981,7 @@
       const hint = !r.hasAPI
         ? isAppUrl
           ? 'API not loaded yet. Ensure Plugins are enabled (Account Settings → Plugins), refresh this tab, wait for the app to load, then try Load Accounts — the extension will wait up to 20s for the API.'
-          : 'This tab is not the app. Use a tab at app.projectionlab.com (your plan/dashboard), not /docs/ or /settings/plugins.'
+          : 'This tab is not the app. Use a tab on the main ProjectionLab app (your plan/dashboard at app.projectionlab.com or ea.projectionlab.com), not /docs/ or /settings/plugins.'
         : '';
       const lines = [
         '(Checking page\'s main context.)',
@@ -856,7 +1009,7 @@
         out.textContent = 'Save your ProjectionLab API key first (Step 1).';
         return;
       }
-      const plTab = await findOrOpenPLTab();
+      const { tab: plTab } = await findAnyPLTabOrOpen();
       const results = await chrome.scripting.executeScript({
         target: { tabId: plTab.id },
         world: 'MAIN',

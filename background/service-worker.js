@@ -4,9 +4,20 @@
  * Falls back to in-page API if HTTP is not available.
  */
 
-const PL_ORIGIN = 'https://app.projectionlab.com';
+// Supported ProjectionLab origins. Order matters: ea.* is preferred (EA gets
+// preferential treatment when both origins accept the same key). Setup probes
+// and HTTP-fallback both honor this order.
+const PL_ORIGINS = [
+  'https://ea.projectionlab.com',
+  'https://app.projectionlab.com',
+];
 const MONARCH_ORIGIN = 'https://app.monarch.com';
-const PL_UPDATE_HTTP_URL = 'https://app.projectionlab.com/api/plugin/updateAccount';
+function buildPLUpdateHttpUrl(origin) {
+  return origin + '/api/plugin/updateAccount';
+}
+function plOriginForUrl(url) {
+  return PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
+}
 const AUTO_SYNC_ALARM = 'chrysalis-auto-sync';
 
 /**
@@ -61,12 +72,24 @@ function buildPayloadAssetWithLoan(update) {
 }
 
 async function findPLTab() {
-  const tabs = await chrome.tabs.query({ url: PL_ORIGIN + '/*' });
+  const tabs = await chrome.tabs.query({ url: PL_ORIGINS.map((o) => o + '/*') });
   if (!tabs.length) return null;
+  const originIndex = (url) => {
+    const idx = PL_ORIGINS.findIndex((o) => typeof url === 'string' && url.startsWith(o));
+    return idx === -1 ? PL_ORIGINS.length : idx;
+  };
   const prefer = (t) => t.url && !t.url.includes('/docs') && !t.url.includes('/settings');
-  const sorted = [...tabs].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-  const main = sorted.find(prefer) || sorted.find(() => true);
-  return main || null;
+  // Primary sort: PL_ORIGINS order (ea.* before app.*). Secondary: most recently accessed.
+  const sorted = [...tabs].sort((a, b) => {
+    const ai = originIndex(a.url);
+    const bi = originIndex(b.url);
+    if (ai !== bi) return ai - bi;
+    return (b.lastAccessed || 0) - (a.lastAccessed || 0);
+  });
+  const main = sorted.find(prefer) || sorted[0];
+  if (!main) return null;
+  const origin = plOriginForUrl(main.url) || PL_ORIGINS[0];
+  return { tab: main, origin };
 }
 
 async function findMonarchTab() {
@@ -80,9 +103,9 @@ async function findMonarchTab() {
  * Update one account via HTTP. Sends force: true so the server skips the "property must exist on account" check
  * (same as in-page options.force — allows assigning balance/balanceType or amount/amountType even if strict check would fail).
  */
-async function updateViaHttp(apiKey, plId, data) {
+async function updateViaHttp(apiKey, plId, data, origin) {
   const body = { accountId: plId, key: apiKey, force: true, ...data };
-  const res = await fetch(PL_UPDATE_HTTP_URL, {
+  const res = await fetch(buildPLUpdateHttpUrl(origin), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -384,16 +407,31 @@ async function runSyncWithTabId(tabId) {
     let lastSyncMethod = 'none';
     let plTabUrl = null;
     if (updatesToRun.length > 0) {
-      const plTab = await findPLTab();
-      if (plTab) {
+      const found = await findPLTab();
+      if (found) {
+        const { tab: plTab, origin } = found;
         lastSyncMethod = 'in-page (PL tab)';
         plTabUrl = plTab.url || null;
         plResults = await runPLUpdatesInTab(plTab.id, updatesWithPayload, plApiKey);
+        // Persist the origin we just synced against so HTTP fallback on future runs
+        // knows which instance to hit.
+        try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
-        lastSyncMethod = 'HTTP (no PL tab; see extension service worker Network)';
-        for (const u of updatesWithPayload) {
-          const hr = await updateViaHttp(plApiKey, u.plId, u.data);
-          plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
+        // No PL tab open — fall back to HTTP, but only against the cached origin.
+        // Guessing at random would risk posting an app.* user's updates to ea.* (or vice versa).
+        const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
+        if (cachedOrigin && PL_ORIGINS.includes(cachedOrigin)) {
+          lastSyncMethod = `HTTP ${cachedOrigin} (no PL tab; see extension service worker Network)`;
+          for (const u of updatesWithPayload) {
+            const hr = await updateViaHttp(plApiKey, u.plId, u.data, cachedOrigin);
+            plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
+          }
+        } else {
+          lastSyncMethod = 'error: no PL tab and no cached instance';
+          const errMsg = 'No ProjectionLab tab open and no cached instance. Open Chrysalis setup once so we can detect your ProjectionLab instance (app.projectionlab.com or ea.projectionlab.com), or open a ProjectionLab tab before syncing.';
+          for (const u of updatesWithPayload) {
+            plResults.push({ plId: u.plId, success: false, error: errMsg });
+          }
         }
       }
     }

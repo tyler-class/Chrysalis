@@ -8,7 +8,8 @@
     "https://app.monarch.com/*",
     "https://api.monarch.com/*",
     "https://api.monarchmoney.com/*",
-    "https://app.projectionlab.com/*"
+    "https://app.projectionlab.com/*",
+    "https://ea.projectionlab.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
