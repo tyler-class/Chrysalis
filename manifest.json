@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chrysalis",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Sync Monarch Money balances to ProjectionLab with one click.",
   "permissions": ["storage", "activeTab", "scripting", "tabs", "alarms"],
   "host_permissions": [
