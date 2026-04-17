@@ -351,18 +351,35 @@ query GetAccounts {
     id
     displayName
     currentBalance
+    displayBalance
     type { name }
     isHidden
   }
 }
 `;
 
-function parseBalance(displayBalance) {
-  if (displayBalance == null) return 0;
-  if (typeof displayBalance === 'number' && !Number.isNaN(displayBalance)) return displayBalance;
-  const s = String(displayBalance).replace(/[$,]/g, '').trim();
-  const n = parseFloat(s);
-  return Number.isNaN(n) ? 0 : n;
+function parseOptionalBalance(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const s = String(value)
+    .replace(/[,$]/g, '')
+    .replace(/[−–—]/g, '-')
+    .trim();
+  const match = s.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const n = Number(match[0]);
+  if (!Number.isFinite(n)) return null;
+  return /^\(.*\)$/.test(s) ? -Math.abs(n) : n;
+}
+
+function accountBalance(node) {
+  const current = parseOptionalBalance(node?.currentBalance);
+  const display = parseOptionalBalance(node?.displayBalance);
+  if (current == null) return display == null ? 0 : display;
+  // Some Monarch account types can report currentBalance as zero while
+  // displayBalance is the USD value shown in the app.
+  if (current === 0 && display != null && display !== 0) return display;
+  return current;
 }
 
 function describeValue(val) {
@@ -431,7 +448,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .map((node) => ({
           id: node.id,
           name: node.displayName || node.id,
-          displayBalance: node.currentBalance != null ? node.currentBalance : node.displayBalance,
+          displayBalance: accountBalance(node),
           type: node.type?.name,
           subtype: node.subtype?.name,
           institution: node.institution?.name,
@@ -450,13 +467,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const allNodes = Array.isArray(rawAccounts) ? rawAccounts : [];
       const visible = allNodes.filter((node) => !node.isHidden);
       const idSet = new Set(accountIds);
-      const balanceVal = (node) => node.currentBalance != null ? node.currentBalance : node.displayBalance;
       const accounts = visible
         .filter((node) => idSet.has(node.id))
         .map((node) => ({
           id: node.id,
           name: node.displayName || node.id,
-          balance: parseBalance(balanceVal(node)),
+          balance: accountBalance(node),
         }));
       return { success: true, accounts };
     }
