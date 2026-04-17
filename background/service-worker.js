@@ -258,10 +258,19 @@ function normalizeMappings(raw) {
  * Returns { success, partialSuccess?, results?, error? }.
  */
 async function runSyncWithTabId(tabId) {
-  const [sync, rawMappings] = await Promise.all([
-    chrome.storage.sync.get(['plApiKey']),
-    globalThis.ChrysalisMappingStorage.loadMappings(),
-  ]);
+  let sync;
+  let rawMappings;
+  try {
+    [sync, rawMappings] = await Promise.all([
+      chrome.storage.sync.get(['plApiKey']),
+      globalThis.ChrysalisMappingStorage.loadMappings(),
+    ]);
+  } catch (e) {
+    return {
+      success: false,
+      error: `Could not load account mappings: ${e.message || String(e)}`,
+    };
+  }
     const plApiKey = sync.plApiKey;
     const accountMappings = normalizeMappings(rawMappings || []);
 

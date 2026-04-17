@@ -96,6 +96,19 @@
     contentEl.querySelector('#open-setup-cta').onclick = () => chrome.runtime.openOptionsPage();
   }
 
+  function renderMappingStorageError(error) {
+    const message = error && error.message ? error.message : String(error);
+    setStatus('yellow', 'Setup needs attention');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>Chrysalis could not load your saved account mappings.</p>
+        <p style="margin-top:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">${escapeHtml(message)}</p>
+        <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
+      </div>
+    `;
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.runtime.openOptionsPage();
+  }
+
   function renderNotOnMonarch(plCount, monarchTotal) {
     setStatus('gray', 'To use Chrysalis, open the Monarch app, then click the extension icon again.');
     contentEl.innerHTML = `
@@ -410,17 +423,26 @@
     const onMonarch = tabUrl.startsWith(MONARCH_ORIGIN);
     currentTabId = tab?.id ?? null;
 
-    const [sync, local, rawMappings] = await Promise.all([
-      chrome.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
-      chrome.storage.local.get([
-        'lastSyncTime',
-        'lastSyncResults',
-        'lastSyncDebug',
-        'syncHistory',
-        'webstoreRatingPromptDismissed',
-      ]),
-      getMappingStorage().loadMappings(),
-    ]);
+    let sync;
+    let local;
+    let rawMappings;
+    try {
+      [sync, local, rawMappings] = await Promise.all([
+        chrome.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
+        chrome.storage.local.get([
+          'lastSyncTime',
+          'lastSyncResults',
+          'lastSyncDebug',
+          'syncHistory',
+          'webstoreRatingPromptDismissed',
+        ]),
+        getMappingStorage().loadMappings(),
+      ]);
+    } catch (e) {
+      console.error('[Chrysalis][popup] Failed to load account mappings:', e);
+      renderMappingStorageError(e);
+      return;
+    }
     const plApiKey = sync.plApiKey;
     const mappings = normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);

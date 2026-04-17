@@ -41,6 +41,7 @@
   let plAccounts = [];
   let plApiKey = '';
   let accountMappings = [];
+  let mappingStorageLoadError = null;
 
   function normalizeMappings(raw) {
     if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -118,6 +119,15 @@
     return `Could not save account mappings. ${message}`;
   }
 
+  function formatMappingLoadError(error) {
+    const message = error && error.message ? error.message : String(error);
+    return `Could not load saved account mappings. ${message} Reload this page after Chrome Sync finishes, or use Advanced to upload a mappings backup or clear mappings.`;
+  }
+
+  function formatMappingLoadBlockedError() {
+    return 'Account mappings were not saved because the existing saved mappings could not be loaded safely. Reload this page after Chrome Sync finishes, or use Advanced to upload a mappings backup or clear mappings.';
+  }
+
   async function loadMappingsFromStorage() {
     return getMappingStorage().loadMappings();
   }
@@ -125,6 +135,7 @@
   async function saveMappingsToStorage(mappings) {
     try {
       await getMappingStorage().saveMappings(mappings);
+      mappingStorageLoadError = null;
       setSaveError('');
       return true;
     } catch (e) {
@@ -398,8 +409,9 @@
     document.getElementById('clear-mappings').addEventListener('click', async () => {
       if (card.classList.contains('advanced-locked')) return;
       if (!confirm('Clear all saved account mappings? The mapping table will be reset. Your API key and cached account lists are not affected.')) return;
-      accountMappings = [];
-      if (!(await saveMappingsToStorage(accountMappings))) return;
+      const clearedMappings = [];
+      if (!(await saveMappingsToStorage(clearedMappings))) return;
+      accountMappings = clearedMappings;
       updateChips();
       renderMappingRows();
       updateStepComplete('step3', false);
@@ -526,11 +538,18 @@
   function reconcileMappingsWithAccounts() {}
 
   async function loadStorage() {
-    const [sync, local, rawMappings] = await Promise.all([
+    const [sync, local] = await Promise.all([
       chrome.storage.sync.get(['plApiKey']),
       chrome.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']),
-      loadMappingsFromStorage(),
     ]);
+    let rawMappings = [];
+    try {
+      rawMappings = await loadMappingsFromStorage();
+      mappingStorageLoadError = null;
+    } catch (e) {
+      mappingStorageLoadError = e;
+      console.error('[Chrysalis][setup] Failed to load account mappings:', e);
+    }
     plApiKey = sync.plApiKey || '';
     accountMappings = normalizeMappings(rawMappings || []);
     try {
@@ -572,6 +591,7 @@
       return (m.monarchAccounts?.length || 0) > 0;
     });
     updateStepComplete('step3', step3Complete);
+    if (mappingStorageLoadError) setSaveError(formatMappingLoadError(mappingStorageLoadError));
     // Only collapse Map Accounts on initial load when already configured; never auto-close during the session
     if (step3Complete) setStepCollapsed('step3', true);
   }
@@ -1896,6 +1916,10 @@
   }
 
   async function persistMappings() {
+    if (mappingStorageLoadError) {
+      setSaveError(formatMappingLoadBlockedError());
+      return false;
+    }
     if (!(await saveMappingsToStorage([...accountMappings]))) return false;
     try {
       console.log('[Chrysalis][setup] persistMappings saving accountMappings:', accountMappings);

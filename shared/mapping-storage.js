@@ -28,6 +28,15 @@
     return CHUNK_PREFIX + index;
   }
 
+  function createIncompleteMappingsError(missingKeys) {
+    const err = new Error(
+      'Saved account mappings are incomplete. Reload after Chrome Sync finishes, or restore from a backup.'
+    );
+    err.code = 'INCOMPLETE_MAPPING_STORAGE';
+    err.missingKeys = missingKeys;
+    return err;
+  }
+
   function getSyncStorage(storageArea) {
     if (storageArea) return storageArea;
     if (!global.chrome || !global.chrome.storage || !global.chrome.storage.sync) {
@@ -89,13 +98,19 @@
     const chunksByKey = await syncStorage.get(keys);
     const mappings = [];
 
+    const missingKeys = [];
     for (const key of keys) {
       const chunk = chunksByKey && chunksByKey[key];
       if (!Array.isArray(chunk)) {
-        if (legacyMappings.length > 0) return legacyMappings;
-        throw new Error('Saved account mappings are incomplete. Restore from a backup or reload mappings.');
+        missingKeys.push(key);
+        continue;
       }
       mappings.push(...chunk);
+    }
+
+    if (missingKeys.length > 0) {
+      if (legacyMappings.length > 0) return legacyMappings;
+      throw createIncompleteMappingsError(missingKeys);
     }
 
     return mappings;
@@ -123,7 +138,13 @@
     for (let i = chunks.length; i < previousChunkCount; i += 1) {
       staleKeys.push(chunkKey(i));
     }
-    await syncStorage.remove(staleKeys);
+    try {
+      await syncStorage.remove(staleKeys);
+    } catch (e) {
+      try {
+        console.warn('[Chrysalis] Saved mappings, but failed to clean up stale mapping storage keys:', e);
+      } catch (_) {}
+    }
   }
 
   global.ChrysalisMappingStorage = {
