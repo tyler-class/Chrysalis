@@ -101,6 +101,39 @@
     return out;
   }
 
+  function getMappingStorage() {
+    if (!window.ChrysalisMappingStorage) {
+      throw new Error('Mapping storage helper did not load.');
+    }
+    return window.ChrysalisMappingStorage;
+  }
+
+  function setSaveError(message) {
+    const el = document.getElementById('save-error');
+    if (el) el.textContent = message || '';
+  }
+
+  function formatMappingStorageError(error) {
+    const message = error && error.message ? error.message : String(error);
+    return `Could not save account mappings. ${message}`;
+  }
+
+  async function loadMappingsFromStorage() {
+    return getMappingStorage().loadMappings();
+  }
+
+  async function saveMappingsToStorage(mappings) {
+    try {
+      await getMappingStorage().saveMappings(mappings);
+      setSaveError('');
+      return true;
+    } catch (e) {
+      setSaveError(formatMappingStorageError(e));
+      console.error('[Chrysalis][setup] Failed to save account mappings:', e);
+      return false;
+    }
+  }
+
   function updateChips() {
     const hasKey = !!(plApiKey && plApiKey.trim());
     const chipPl = document.getElementById('chip-pl');
@@ -366,7 +399,7 @@
       if (card.classList.contains('advanced-locked')) return;
       if (!confirm('Clear all saved account mappings? The mapping table will be reset. Your API key and cached account lists are not affected.')) return;
       accountMappings = [];
-      await chrome.storage.sync.set({ accountMappings: [] });
+      if (!(await saveMappingsToStorage(accountMappings))) return;
       updateChips();
       renderMappingRows();
       updateStepComplete('step3', false);
@@ -381,7 +414,8 @@
       monarchAccounts = [];
       plAccounts = [];
       accountMappings = [];
-      await chrome.storage.sync.set({ plApiKey: '', accountMappings: [], autoSyncEnabled: false });
+      await chrome.storage.sync.set({ plApiKey: '', autoSyncEnabled: false });
+      if (!(await saveMappingsToStorage(accountMappings))) return;
       await chrome.storage.local.clear();
       updateChips();
       updateStepComplete('step1', false);
@@ -419,8 +453,10 @@
         if (!Array.isArray(raw)) throw new Error('File must be a JSON array of mappings.');
         const normalized = normalizeMappings(raw);
         if (normalized.length === 0) throw new Error('No valid mappings in file.');
+        if (!(await saveMappingsToStorage(normalized))) {
+          throw new Error('Could not save mappings. See the Map Accounts error for details.');
+        }
         accountMappings = normalized;
-        await chrome.storage.sync.set({ accountMappings: normalized });
         updateChips();
         renderMappingRows();
         updateStepComplete('step3', accountMappings.length > 0 && accountMappings.every((m) => m.plId && (m.monarchAccounts?.length || 0) > 0));
@@ -490,12 +526,15 @@
   function reconcileMappingsWithAccounts() {}
 
   async function loadStorage() {
-    const sync = await chrome.storage.sync.get(['plApiKey', 'accountMappings']);
-    const local = await chrome.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']);
+    const [sync, local, rawMappings] = await Promise.all([
+      chrome.storage.sync.get(['plApiKey']),
+      chrome.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']),
+      loadMappingsFromStorage(),
+    ]);
     plApiKey = sync.plApiKey || '';
-    accountMappings = normalizeMappings(sync.accountMappings || []);
+    accountMappings = normalizeMappings(rawMappings || []);
     try {
-      console.log('[Chrysalis][setup] loadStorage raw accountMappings from sync:', sync.accountMappings);
+      console.log('[Chrysalis][setup] loadStorage raw accountMappings from sync:', rawMappings);
       console.log('[Chrysalis][setup] loadStorage normalized accountMappings:', accountMappings);
     } catch (_) {}
     if (Array.isArray(local.cachedMonarchAccounts) && local.cachedMonarchAccounts.length > 0) {
@@ -1857,7 +1896,7 @@
   }
 
   async function persistMappings() {
-    await chrome.storage.sync.set({ accountMappings: [...accountMappings] });
+    if (!(await saveMappingsToStorage([...accountMappings]))) return false;
     try {
       console.log('[Chrysalis][setup] persistMappings saving accountMappings:', accountMappings);
     } catch (_) {}
@@ -1872,6 +1911,7 @@
       return (m.monarchAccounts?.length || 0) > 0;
     });
     updateStepComplete('step3', step3Complete);
+    return true;
   }
 
   async function autoSaveMappingsIfRowComplete(mapping, tr) {
@@ -1882,8 +1922,7 @@
     const hasMonarchValue = Array.isArray(mapping.monarchAccounts) && mapping.monarchAccounts.length > 0;
     const hasMonarchLoan = Array.isArray(mapping.monarchAccountsLoan) && mapping.monarchAccountsLoan.length > 0;
     if (!hasPl && !hasMonarchValue && !hasMonarchLoan) return;
-    await persistMappings();
-    showRowSavedCheck(tr);
+    if (await persistMappings()) showRowSavedCheck(tr);
   }
 
   setupStepToggles();

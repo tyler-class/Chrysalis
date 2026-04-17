@@ -20,6 +20,13 @@
     maximumFractionDigits: 0,
   });
 
+  function getMappingStorage() {
+    if (!window.ChrysalisMappingStorage) {
+      throw new Error('Mapping storage helper did not load.');
+    }
+    return window.ChrysalisMappingStorage;
+  }
+
   function normalizeMappings(raw) {
     if (!Array.isArray(raw) || raw.length === 0) return [];
     const hasNewSchema = raw.some(
@@ -403,16 +410,19 @@
     const onMonarch = tabUrl.startsWith(MONARCH_ORIGIN);
     currentTabId = tab?.id ?? null;
 
-    const sync = await chrome.storage.sync.get(['plApiKey', 'accountMappings', 'showDebugOnPopup']);
-    const local = await chrome.storage.local.get([
-      'lastSyncTime',
-      'lastSyncResults',
-      'lastSyncDebug',
-      'syncHistory',
-      'webstoreRatingPromptDismissed',
+    const [sync, local, rawMappings] = await Promise.all([
+      chrome.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
+      chrome.storage.local.get([
+        'lastSyncTime',
+        'lastSyncResults',
+        'lastSyncDebug',
+        'syncHistory',
+        'webstoreRatingPromptDismissed',
+      ]),
+      getMappingStorage().loadMappings(),
     ]);
     const plApiKey = sync.plApiKey;
-    const mappings = normalizeMappings(sync.accountMappings || []);
+    const mappings = normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
     const plMappingCount = mappings.length;
     const monarchTotal = mappings.reduce((sum, m) => sum + (m.monarchAccounts?.length || 0), 0);
