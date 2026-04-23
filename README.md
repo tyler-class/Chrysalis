@@ -62,8 +62,8 @@ Before you can map anything, Chrysalis needs to fetch your account lists from bo
 
 1. Make sure you're logged into Monarch Money. Have `app.monarchmoney.com` open in a tab
 2. Click **Load Accounts from Monarch**. You should see success text underneath the button
-3. Make sure you're logged into ProjectionLab in an open tab
-4. Click **Load Accoungs from ProjectionLab**. You should see success text underneath the button
+3. Make sure you're logged into ProjectionLab in an open tab (as of release 1.0.4 it supports both app.projectionlab.com and ea.projectionlab.com)
+4. Click **Load Accounts from ProjectionLab**. You should see success text underneath the button
 5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings are keyed by ID and will be preserved even if you change the name of an account.
 
 ### Step 3 — Map your accounts
