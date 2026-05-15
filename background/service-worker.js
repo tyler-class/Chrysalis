@@ -579,21 +579,31 @@ async function runSyncWithTabId(tabId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type !== 'RUN_SYNC') {
-    return false;
+  if (message.type == 'RUN_SYNC') {
+      const tabId = message.tabId;
+      if (tabId == null) {
+        sendResponse({ success: false, error: 'Missing tabId' });
+        return true;
+      }
+      runSyncWithTabId(tabId)
+        .then(sendResponse)
+        .catch((err) => {
+          console.error('[Chrysalis]', err.message || err);
+          sendResponse({ success: false, error: err.message || String(err) });
+        });
+      return true;
+  } else if (message.type == 'GET_MONARCH_CSRF_TOKEN') {
+      const monarchURL = message.url;
+      if (monarchURL == null) {
+          sendResponse({ success: false, error: 'Missing Monarch URL'});
+          return true;
+      }
+      chrome.cookies.get({ url: monarchURL, name: "csrftoken" }, (cookie) => {
+        sendResponse({ success: true, token: cookie ? cookie.value : null});
+      });
+    return true; // Keep channel open for async response
   }
-  const tabId = message.tabId;
-  if (tabId == null) {
-    sendResponse({ success: false, error: 'Missing tabId' });
-    return true;
-  }
-  runSyncWithTabId(tabId)
-    .then(sendResponse)
-    .catch((err) => {
-      console.error('[Chrysalis]', err.message || err);
-      sendResponse({ success: false, error: err.message || String(err) });
-    });
-  return true;
+  return false;
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
