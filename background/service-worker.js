@@ -592,21 +592,34 @@ async function runSyncWithTabId(tabId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type !== 'RUN_SYNC') {
-    return false;
-  }
-  const tabId = message.tabId;
-  if (tabId == null) {
-    sendResponse({ success: false, error: 'Missing tabId' });
-    return true;
-  }
-  runSyncWithTabId(tabId)
-    .then(sendResponse)
-    .catch((err) => {
-      console.error('[Chrysalis]', err.message || err);
-      sendResponse({ success: false, error: err.message || String(err) });
+  if (message.type == 'RUN_SYNC') {
+      const tabId = message.tabId;
+      if (tabId == null) {
+        sendResponse({ success: false, error: 'Missing tabId' });
+        return true;
+      }
+      runSyncWithTabId(tabId)
+        .then(sendResponse)
+        .catch((err) => {
+          console.error('[Chrysalis]', err.message || err);
+          sendResponse({ success: false, error: err.message || String(err) });
+        });
+      return true;
+  } else if (message.type == 'GET_MONARCH_CSRF_TOKEN') {
+    chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      world: 'MAIN',
+      func: () => {
+        const match = document.cookie.match(/(^|;\s*)csrftoken=([^;]*)/);
+        return match ? match[2] : null;
+      }
+    }).then(results => {
+      const tokenVal = results[0].result;
+      sendResponse({ success: true, token: tokenVal});
     });
-  return true;
+    return true; // Keep channel open for async response
+  }
+  return false;
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
