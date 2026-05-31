@@ -600,7 +600,7 @@
     /* Step 1 — ProjectionLab Settings: API key + Early Access toggle */
     .pl-settings-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
     .pl-key-col { flex: 1; min-width: 260px; }
-    .ea-toggle-field { min-width: 220px; padding-top: 2px; padding-right: 60px; }
+    .ea-toggle-field { margin-top: 22px; }
     .ea-toggle-label { display: block; font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 10px; }
     .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
     .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -652,26 +652,22 @@
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="step-body" id="step1-body">
-      <div class="pl-settings-row">
-        <div class="pl-key-col">
-          <label for="pl-key">ProjectionLab API Key</label>
-          <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
-          <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
-        </div>
-        <div class="ea-toggle-field">
-          <span class="ea-toggle-label">Opt in to ProjectionLab Early Access</span>
-          <label class="switch">
-            <input type="checkbox" id="pl-early-access" />
-            <span class="switch-slider"></span>
-            <span class="switch-text">Use ea.projectionlab.com</span>
-          </label>
-          <p class="hint">If your ProjectionLab account is enrolled in Early Access, turn this on to use the ea.projectionlab.com endpoint instead of the default app.projectionlab.com.</p>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px">
+      <label for="pl-key">ProjectionLab API Key</label>
+      <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
+      <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">
         <button type="button" class="btn btn-primary" id="save-key">Save Key</button>
         <button type="button" class="btn btn-secondary" id="clear-key">Clear API Key</button>
         <span id="key-saved-msg" class="load-status" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      <div class="ea-toggle-field">
+        <span class="ea-toggle-label">Opt in to ProjectionLab Early Access</span>
+        <label class="switch">
+          <input type="checkbox" id="pl-early-access" />
+          <span class="switch-slider"></span>
+          <span class="switch-text">Use ea.projectionlab.com</span>
+        </label>
+        <p class="hint">If your ProjectionLab account is enrolled in Early Access, turn this on to use the ea.projectionlab.com endpoint instead of the default app.projectionlab.com.</p>
       </div>
       </div>
     </div>

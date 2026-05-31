@@ -88,7 +88,7 @@ Click the Chrysalis icon and then click **Setup ↗** in the top-right corner of
 
 <kbd><img src="screenshots/full-setup-not-configured.png" width="600"></kbd>
 
-### Step 1 — Add your ProjectionLab API key
+### Step 1 — Set up ProjectionLab
 
 Chrysalis uses ProjectionLab's official Plugin API to update your account balances. You need to enable this and generate a key:
 
@@ -97,7 +97,9 @@ Chrysalis uses ProjectionLab's official Plugin API to update your account balanc
 3. Toggle **Enable Plugins** on
 4. Copy the value shown in the **Plugin API Key** field
 
-Paste it into the API key field in Chrysalis and click **Save Key**.
+Paste it into the **ProjectionLab API Key** field in Chrysalis and click **Save Key**.
+
+**ProjectionLab Early Access (optional):** Most people should skip this — by default Chrysalis uses the standard `app.projectionlab.com`. If your ProjectionLab account is enrolled in the Early Access program (`ea.projectionlab.com`), flip on the **Opt in to ProjectionLab Early Access** toggle (below the Save/Clear buttons) so account loading and balance syncs use the Early Access endpoint instead.
 
 ### Step 2 — Load your accounts
 
@@ -105,7 +107,7 @@ Before you can map anything, Chrysalis needs to fetch your account lists from bo
 
 1. Make sure you're logged into Monarch Money. Have `app.monarchmoney.com` open in a tab
 2. Click **Load Accounts from Monarch**. You should see success text underneath the button
-3. Make sure you're logged into ProjectionLab in an open tab (as of release 1.0.4 it supports both app.projectionlab.com and ea.projectionlab.com)
+3. Make sure you're logged into ProjectionLab in an open tab — `app.projectionlab.com`, or `ea.projectionlab.com` if you enabled Early Access in Step 1
 4. Click **Load Accounts from ProjectionLab**. You should see success text underneath the button
 5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings are keyed by ID and will be preserved even if you change the name of an account.
 
@@ -168,11 +170,15 @@ After you have at least 1 sync in the cache, the popup will also include details
 
 ### Authentication
 
-Chrysalis does not store your Monarch username or password. Instead, it reads the session token that Monarch's web app stores in the browser's `localStorage` after you log in normally. This is the same token your browser is already using to show you your accounts — Chrysalis just borrows it. This approach is both more secure and more reliable than storing credentials.
+Chrysalis never sees or stores your Monarch or ProjectionLab username or password.
+
+**Monarch** is authenticated by reusing the session you're already logged into. When you sync, Chrysalis reads the CSRF token that Monarch's web app keeps in the page — via a `MAIN`-world script injected into your open Monarch tab — and sends it together with your browser's existing Monarch session cookies on the API request. Because it rides on your existing session, there are no credentials to store and **no extra browser permissions** are required (notably, the `cookies` permission is *not* used). This is also why syncing only works while a Monarch tab is open.
+
+**ProjectionLab** is authenticated with the Plugin API key you saved in Step 1. Requests go to `app.projectionlab.com` by default, or `ea.projectionlab.com` if you opted into Early Access.
 
 ### Fetching balances
 
-Once it has the session token, Chrysalis makes a GraphQL request directly to Monarch's API, the same endpoint the Monarch web app uses, and retrieves the current balance for each of your mapped accounts.
+Once authenticated, Chrysalis makes a GraphQL request directly to Monarch's API — the same endpoint the Monarch web app uses — and retrieves the current balance for each of your mapped accounts.
 
 ### Updating ProjectionLab
 
@@ -266,9 +272,9 @@ This section has 2 buttons: one to download your current mappings as a JSON file
 
 ## 🚑 Troubleshooting
 
-**"No Monarch session token found"**
+**"Failed to fetch" or Monarch accounts won't load**
 
-Make sure you're logged into Monarch Money in the current tab. Try refreshing the Monarch page and syncing again. If you're still having issues, go to the Advanced section under Setup and click the "Run Monarch diagnosis" button. It will generate some text that should help you solve the issue.
+Make sure you're logged into Monarch Money and that the Monarch tab is open when you sync (Chrysalis reads its auth from that tab). Try refreshing the Monarch page and syncing again. If you're still having issues, go to the Advanced section under Setup and click the "Run Monarch diagnosis" button. It will generate some text that should help you solve the issue.
 
 **"ProjectionLab plugin API not found"**
 
@@ -294,7 +300,7 @@ Check the sync result detail in the popup — if a many-to-one mapping is partia
 
 Contributions are welcome, especially fixes when Monarch or ProjectionLab change their APIs.
 
-**When Monarch breaks auth or account fetching**, the relevant file is `content-scripts/monarch.js`. The most common failure mode is that the session token could move to a different `localStorage` key. The token scanning logic is at the top of that file.
+**When Monarch breaks auth or account fetching**, the relevant file is `content-scripts/monarch.js`. Auth relies on the CSRF token read from the logged-in Monarch tab (a `MAIN`-world script) plus the existing session cookies; the auth and request-building logic is at the top of that file.
 
 **When ProjectionLab's Plugin API changes**, the relevant call is in `background/service-worker.js`.
 
