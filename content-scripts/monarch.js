@@ -46,11 +46,12 @@ function buildMonarchHeaders(csrftoken) {
   return headers;
 }
 
-async function getMonarchCSRFToken(monarchURL) {
+async function getMonarchCSRFToken() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: "GET_MONARCH_CSRF_TOKEN", url: MONARCH_ORIGIN }, (response) => {
       if (!response || !response.success) {
-          resolve(null);
+        resolve(null);
+        return;
       }
       resolve(response.token);
     });
@@ -60,7 +61,7 @@ async function getMonarchCSRFToken(monarchURL) {
 async function graphqlRequestWithAuth(query, variables = {}) {
   for (const graphqlUrl of [MONARCH_GRAPHQL, MONARCH_GRAPHQL_LEGACY]) {
     let res;
-    const csrftoken = await getMonarchCSRFToken(graphqlUrl);
+    const csrftoken = await getMonarchCSRFToken();
     try {
       res = await fetchWithTimeout(
           graphqlUrl,
@@ -173,11 +174,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handle = async () => {
     if (message.type === 'DIAGNOSE_STORAGE') {
       return { success: true, report: diagnoseStorage() };
-    }
-
-    if (message.type === 'GET_TOKEN') {
-      const token = getTokenFromStorage();
-      return { token: token || null, success: !!token };
     }
 
     if (message.type === 'FETCH_ACCOUNTS') {
