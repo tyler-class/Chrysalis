@@ -4,6 +4,8 @@
  * Falls back to in-page API if HTTP is not available.
  */
 
+import '../shared/mapping-storage.js';
+
 // Supported ProjectionLab origins. Order matters: ea.* is preferred (EA gets
 // preferential treatment when both origins accept the same key). Setup probes
 // and HTTP-fallback both honor this order.
@@ -256,9 +258,20 @@ function normalizeMappings(raw) {
  * Returns { success, partialSuccess?, results?, error? }.
  */
 async function runSyncWithTabId(tabId) {
-  const sync = await chrome.storage.sync.get(['plApiKey', 'accountMappings']);
+  let sync;
+  let rawMappings;
+  try {
+    [sync, rawMappings] = await Promise.all([
+      chrome.storage.sync.get(['plApiKey']),
+      globalThis.ChrysalisMappingStorage.loadMappings(),
+    ]);
+  } catch (e) {
+    return {
+      success: false,
+      error: `Could not load account mappings: ${e.message || String(e)}`,
+    };
+  }
     const plApiKey = sync.plApiKey;
-    const rawMappings = sync.accountMappings;
     const accountMappings = normalizeMappings(rawMappings || []);
 
     if (!plApiKey || !plApiKey.trim()) {

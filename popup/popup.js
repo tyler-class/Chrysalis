@@ -20,6 +20,13 @@
     maximumFractionDigits: 0,
   });
 
+  function getMappingStorage() {
+    if (!window.ChrysalisMappingStorage) {
+      throw new Error('Mapping storage helper did not load.');
+    }
+    return window.ChrysalisMappingStorage;
+  }
+
   function normalizeMappings(raw) {
     if (!Array.isArray(raw) || raw.length === 0) return [];
     const hasNewSchema = raw.some(
@@ -83,6 +90,19 @@
       <div class="cta-card">
         <p>To use Chrysalis, complete setup first: add your ProjectionLab API key and map your Monarch accounts to ProjectionLab accounts.</p>
         <p style="margin-top:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">It only takes a few minutes.</p>
+        <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
+      </div>
+    `;
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.runtime.openOptionsPage();
+  }
+
+  function renderMappingStorageError(error) {
+    const message = error && error.message ? error.message : String(error);
+    setStatus('yellow', 'Setup needs attention');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>Chrysalis could not load your saved account mappings.</p>
+        <p style="margin-top:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">${escapeHtml(message)}</p>
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
       </div>
     `;
@@ -403,16 +423,28 @@
     const onMonarch = tabUrl.startsWith(MONARCH_ORIGIN);
     currentTabId = tab?.id ?? null;
 
-    const sync = await chrome.storage.sync.get(['plApiKey', 'accountMappings', 'showDebugOnPopup']);
-    const local = await chrome.storage.local.get([
-      'lastSyncTime',
-      'lastSyncResults',
-      'lastSyncDebug',
-      'syncHistory',
-      'webstoreRatingPromptDismissed',
-    ]);
+    let sync;
+    let local;
+    let rawMappings;
+    try {
+      [sync, local, rawMappings] = await Promise.all([
+        chrome.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
+        chrome.storage.local.get([
+          'lastSyncTime',
+          'lastSyncResults',
+          'lastSyncDebug',
+          'syncHistory',
+          'webstoreRatingPromptDismissed',
+        ]),
+        getMappingStorage().loadMappings(),
+      ]);
+    } catch (e) {
+      console.error('[Chrysalis][popup] Failed to load account mappings:', e);
+      renderMappingStorageError(e);
+      return;
+    }
     const plApiKey = sync.plApiKey;
-    const mappings = normalizeMappings(sync.accountMappings || []);
+    const mappings = normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
     const plMappingCount = mappings.length;
     const monarchTotal = mappings.reduce((sum, m) => sum + (m.monarchAccounts?.length || 0), 0);
