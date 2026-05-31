@@ -597,6 +597,26 @@
       color: var(--red);
       border: 1px solid var(--red);
     }
+    /* Step 1 — ProjectionLab Settings: API key + Early Access toggle */
+    .pl-settings-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+    .pl-key-col { flex: 1; min-width: 260px; }
+    .ea-toggle-field { min-width: 220px; padding-top: 2px; padding-right: 60px; }
+    .ea-toggle-label { display: block; font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 10px; }
+    .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+    .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .switch-slider {
+      position: relative; width: 40px; height: 22px; border-radius: 999px;
+      background: var(--border); transition: background 0.15s ease; flex-shrink: 0;
+    }
+    .switch-slider::before {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; border-radius: 50%; background: #fff;
+      transition: transform 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    }
+    .switch input:checked + .switch-slider { background: var(--accent); }
+    .switch input:checked + .switch-slider::before { transform: translateX(18px); }
+    .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px rgba(37,99,235,0.3); }
+    .switch-text { font-size: 12px; color: var(--muted); }
     .btn-danger:hover:not(:disabled) { background: #fef2f2; }
     .btn-arrow { margin-left: 4px; opacity: 0.85; font-size: 0.95em; }
   </style>
@@ -628,14 +648,27 @@
     <div class="step-card" id="step1">
       <div class="step-head" tabindex="0" role="button" aria-expanded="true" aria-controls="step1-body">
         <span class="step-num">1</span>
-        <span class="step-title">ProjectionLab API Key</span>
+        <span class="step-title">ProjectionLab Settings</span>
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="step-body" id="step1-body">
-      <label for="pl-key">API Key</label>
-      <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
-      <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="pl-settings-row">
+        <div class="pl-key-col">
+          <label for="pl-key">ProjectionLab API Key</label>
+          <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
+          <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
+        </div>
+        <div class="ea-toggle-field">
+          <span class="ea-toggle-label">Opt in to ProjectionLab Early Access</span>
+          <label class="switch">
+            <input type="checkbox" id="pl-early-access" />
+            <span class="switch-slider"></span>
+            <span class="switch-text">Use ea.projectionlab.com</span>
+          </label>
+          <p class="hint">If your ProjectionLab account is enrolled in Early Access, turn this on to use the ea.projectionlab.com endpoint instead of the default app.projectionlab.com.</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px">
         <button type="button" class="btn btn-primary" id="save-key">Save Key</button>
         <button type="button" class="btn btn-secondary" id="clear-key">Clear API Key</button>
         <span id="key-saved-msg" class="load-status" style="font-size:13px;color:var(--muted)"></span>
