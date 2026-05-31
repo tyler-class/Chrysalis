@@ -6,19 +6,24 @@
 
 import '../shared/mapping-storage.js';
 
-// Supported ProjectionLab origins. Order matters: ea.* is preferred (EA gets
-// preferential treatment when both origins accept the same key). Setup probes
-// and HTTP-fallback both honor this order.
-const PL_ORIGINS = [
-  'https://ea.projectionlab.com',
-  'https://app.projectionlab.com',
-];
+// ProjectionLab origins. By default Chrysalis only uses the standard app.*
+// instance. Early Access users opt in via the setup toggle
+// (chrome.storage.sync.plUseEarlyAccess), which makes ea.* the preferred origin
+// with app.* kept as a fallback. ALL_PL_ORIGINS is the full set, used only to
+// recognize a PL URL regardless of the user's preference.
+const APP_PL_ORIGIN = 'https://app.projectionlab.com';
+const EA_PL_ORIGIN = 'https://ea.projectionlab.com';
+const ALL_PL_ORIGINS = [EA_PL_ORIGIN, APP_PL_ORIGIN];
+async function getPlOrigins() {
+  const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+  return plUseEarlyAccess ? [EA_PL_ORIGIN, APP_PL_ORIGIN] : [APP_PL_ORIGIN];
+}
 const MONARCH_ORIGIN = 'https://app.monarch.com';
 function buildPLUpdateHttpUrl(origin) {
   return origin + '/api/plugin/updateAccount';
 }
 function plOriginForUrl(url) {
-  return PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
+  return ALL_PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
 }
 const AUTO_SYNC_ALARM = 'chrysalis-auto-sync';
 
@@ -74,14 +79,16 @@ function buildPayloadAssetWithLoan(update) {
 }
 
 async function findPLTab() {
-  const tabs = await chrome.tabs.query({ url: PL_ORIGINS.map((o) => o + '/*') });
+  const origins = await getPlOrigins();
+  const tabs = await chrome.tabs.query({ url: origins.map((o) => o + '/*') });
   if (!tabs.length) return null;
   const originIndex = (url) => {
-    const idx = PL_ORIGINS.findIndex((o) => typeof url === 'string' && url.startsWith(o));
-    return idx === -1 ? PL_ORIGINS.length : idx;
+    const idx = origins.findIndex((o) => typeof url === 'string' && url.startsWith(o));
+    return idx === -1 ? origins.length : idx;
   };
   const prefer = (t) => t.url && !t.url.includes('/docs') && !t.url.includes('/settings');
-  // Primary sort: PL_ORIGINS order (ea.* before app.*). Secondary: most recently accessed.
+  // Primary sort: preferred-origin order (ea.* before app.* when Early Access is
+  // enabled). Secondary: most recently accessed.
   const sorted = [...tabs].sort((a, b) => {
     const ai = originIndex(a.url);
     const bi = originIndex(b.url);
@@ -90,7 +97,7 @@ async function findPLTab() {
   });
   const main = sorted.find(prefer) || sorted[0];
   if (!main) return null;
-  const origin = plOriginForUrl(main.url) || PL_ORIGINS[0];
+  const origin = plOriginForUrl(main.url) || origins[0];
   return { tab: main, origin };
 }
 
@@ -476,15 +483,17 @@ async function runSyncWithTabId(tabId) {
         try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
         // No PL tab open — fall back to HTTP. Prefer the cached origin (set by
-        // a previous successful in-page sync or by setup's detectPLOrigin).
-        // If no cache exists, default to app.* to match legacy behavior — this
-        // protects existing app.* users whose extension has never written
-        // plOrigin (e.g. right after upgrading from a pre-EA version).
+        // a previous successful in-page sync or by setup's detectPLOrigin), but
+        // only if it's still allowed by the user's current Early Access setting.
+        // Otherwise use the preferred origin for that setting (app.* unless the
+        // user has opted into Early Access). This auto-corrects a stale ea.*
+        // cache after the user turns Early Access back off.
         const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
+        const httpOrigins = await getPlOrigins();
         const httpOrigin =
-          cachedOrigin && PL_ORIGINS.includes(cachedOrigin)
+          cachedOrigin && httpOrigins.includes(cachedOrigin)
             ? cachedOrigin
-            : 'https://app.projectionlab.com';
+            : httpOrigins[0];
         lastSyncMethod = `HTTP ${httpOrigin} (no PL tab; see extension service worker Network)`;
         for (const u of updatesWithPayload) {
           const hr = await updateViaHttp(plApiKey, u.plId, u.data, httpOrigin);

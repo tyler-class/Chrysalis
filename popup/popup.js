@@ -10,6 +10,13 @@
   const logo = document.getElementById('popup-logo');
   if (logo) logo.src = chrome.runtime.getURL('icons/logo-full.jpg');
 
+  // Release/announcement banner — renders into a fixed slot above the status bar
+  // so it survives the per-state content re-renders below. No-op when there's no
+  // active announcement or the user has dismissed the current one.
+  if (window.ChrysalisAnnouncements) {
+    window.ChrysalisAnnouncements.renderInto(document.getElementById('announcement-slot'));
+  }
+
   const MONARCH_ORIGIN = 'https://app.monarch.com';
   const CHROME_WEB_STORE_REVIEWS_URL =
     'https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood/reviews';

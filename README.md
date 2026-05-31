@@ -10,6 +10,49 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
+## 📣 Release Announcement — v1.0.5 (2026-05-31)
+
+This release restores Monarch syncing after an upstream change broke it, makes
+ProjectionLab Early Access a manual opt-in, and folds in several reliability
+fixes contributed by the community.
+
+### ⚠️ Action needed — ProjectionLab Early Access users only
+
+Early Access is now **opt-in**. If your ProjectionLab account is on the Early
+Access program (`ea.projectionlab.com`), open **Setup → ProjectionLab Settings**
+and turn on **“Opt in to ProjectionLab Early Access.”** Everyone else needs to do
+nothing — Chrysalis now uses the standard `app.projectionlab.com` by default.
+
+### What's new & fixed
+
+- **Fixed: Monarch “Failed to fetch.”** Monarch changed how its API
+  authenticates, which broke account loading and balance sync for everyone.
+  Chrysalis now authenticates with the Monarch tab's CSRF token (read in-page via
+  a `MAIN`-world script) instead of the old localStorage token heuristics — and
+  with **no new browser permissions**. _(Closes #13, #17, #18, #19, #21.)_
+- **New: ProjectionLab Early Access toggle.** A manual switch in Setup →
+  ProjectionLab Settings controls whether Chrysalis uses `ea.projectionlab.com`
+  (when on) or the default `app.projectionlab.com` (when off). Previously the
+  Early Access endpoint could be chosen automatically, which was wrong for users
+  not enrolled in it. Account retrieval and balance pushes both honor the toggle.
+  _(Closes #14.)_
+- **Fixed: account-mapping storage quota.** Mappings are now stored in chunks, so
+  larger setups no longer hit Chrome's per-item `storage.sync` limit.
+  _(Thanks @billda — #10.)_
+- **Fixed: Coinbase balances.** Accounts that report a zero `currentBalance` but a
+  non-zero display balance (e.g. some Coinbase accounts) now sync the value shown
+  in the app. _(Thanks @billda — #12.)_
+- **New: in-app announcement banner.** The popup can now surface dismissable
+  release notes like this one. It remembers your dismissal and auto-expires so it
+  won't nag you.
+
+### Credits
+
+CSRF auth fix by @seanius (#22), using the `MAIN`-world approach suggested by
+@incorvia. Storage-quota and Coinbase fixes by @billda (#10, #12).
+
+---
+
 ## 🤔 Why Chrysalis?
 
 ProjectionLab is a powerful financial planning tool, but it need an accurate starting point for projections. Monarch Money knows exactly what your accounts are worth. Chrysalis serves as the bridge between the two, so your plan stays grounded in your actual balances without manual data entry.

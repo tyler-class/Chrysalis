@@ -3,13 +3,18 @@
  */
 
 (function () {
-  // Supported ProjectionLab origins. Order matters: ea.* is probed first
-  // (EA gets preferential treatment; see detectPLOrigin).
-  const PL_ORIGINS = [
-    'https://ea.projectionlab.com',
-    'https://app.projectionlab.com',
-  ];
-  const DEFAULT_PL_ORIGIN = PL_ORIGINS[0];
+  // ProjectionLab origins. By default Chrysalis only uses the standard app.*
+  // instance. Early Access users opt in via the Step 1 toggle
+  // (chrome.storage.sync.plUseEarlyAccess), which makes ea.* the preferred
+  // origin with app.* kept as a fallback. ALL_PL_ORIGINS is the full set, used
+  // only to recognize a PL URL regardless of the user's preference.
+  const APP_PL_ORIGIN = 'https://app.projectionlab.com';
+  const EA_PL_ORIGIN = 'https://ea.projectionlab.com';
+  const ALL_PL_ORIGINS = [EA_PL_ORIGIN, APP_PL_ORIGIN];
+  async function getPlOrigins() {
+    const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+    return plUseEarlyAccess ? [EA_PL_ORIGIN, APP_PL_ORIGIN] : [APP_PL_ORIGIN];
+  }
   const MONARCH_ORIGIN = 'https://app.monarch.com';
   const PL_LOAD_DELAY_MS = 4500;
   const PL_API_RETRY_MS = 2000;
@@ -18,14 +23,18 @@
   const PL_WAIT_POLL_MS = 400;
 
   function plOriginForUrl(url) {
-    return PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
+    return ALL_PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
   }
   async function getCachedPLOrigin() {
     const { plOrigin } = await chrome.storage.local.get(['plOrigin']);
-    return plOrigin && PL_ORIGINS.includes(plOrigin) ? plOrigin : null;
+    if (!plOrigin) return null;
+    // Ignore a cached origin that the current Early Access setting disallows
+    // (e.g. a stale ea.* cache after the user turned Early Access back off).
+    const allowed = await getPlOrigins();
+    return allowed.includes(plOrigin) ? plOrigin : null;
   }
   async function setCachedPLOrigin(origin) {
-    if (origin && PL_ORIGINS.includes(origin)) {
+    if (origin && ALL_PL_ORIGINS.includes(origin)) {
       await chrome.storage.local.set({ plOrigin: origin });
     }
   }
@@ -303,6 +312,20 @@
       });
       showDebugCheckbox.addEventListener('change', () => {
         chrome.storage.sync.set({ showDebugOnPopup: showDebugCheckbox.checked });
+      });
+    }
+
+    // ProjectionLab Early Access opt-in (Step 1). When toggled, persist the
+    // preference and drop any cached instance so the next probe/sync re-resolves
+    // the endpoint under the new setting instead of reusing a now-disallowed one.
+    const earlyAccessCheckbox = document.getElementById('pl-early-access');
+    if (earlyAccessCheckbox) {
+      chrome.storage.sync.get(['plUseEarlyAccess'], (sync) => {
+        earlyAccessCheckbox.checked = !!sync.plUseEarlyAccess;
+      });
+      earlyAccessCheckbox.addEventListener('change', async () => {
+        await chrome.storage.sync.set({ plUseEarlyAccess: earlyAccessCheckbox.checked });
+        await clearCachedPLOrigin();
       });
     }
 
@@ -665,8 +688,9 @@
    * Get a usable PL tab for diagnostic flows (diagnose, inspect schema) that
    * don't have enough context to run full origin detection. Preference order:
    *   1. Cached origin (the user's confirmed instance).
-   *   2. Any already-open PL tab, honoring PL_ORIGINS order (ea.* over app.*).
-   *   3. Open the default preferred origin (ea.*).
+   *   2. Any already-open PL tab, honoring the preferred-origin order.
+   *   3. Open the preferred origin for the current setting (app.* by default,
+   *      ea.* if Early Access is enabled).
    */
   async function findAnyPLTabOrOpen({ openInBackground = false } = {}) {
     const cached = await getCachedPLOrigin();
@@ -674,15 +698,17 @@
       const result = await findOrOpenPLTabForOrigin(cached, { openInBackground });
       return { ...result, origin: cached };
     }
-    for (const origin of PL_ORIGINS) {
+    const origins = await getPlOrigins();
+    for (const origin of origins) {
       const tabs = await chrome.tabs.query({ url: origin + '/*' });
       if (tabs.length) {
         const appTab = tabs.find((t) => isPLAppTab(t.url));
         return { tab: appTab || tabs[0], openedByUs: false, origin };
       }
     }
-    const result = await findOrOpenPLTabForOrigin(DEFAULT_PL_ORIGIN, { openInBackground });
-    return { ...result, origin: DEFAULT_PL_ORIGIN };
+    const fallbackOrigin = origins[0];
+    const result = await findOrOpenPLTabForOrigin(fallbackOrigin, { openInBackground });
+    return { ...result, origin: fallbackOrigin };
   }
 
   /**
@@ -739,7 +765,8 @@
   /**
    * Detect which ProjectionLab instance the user's API key belongs to.
    *   1. Cache hit → return immediately.
-   *   2. Probe each origin in PL_ORIGINS order (ea.* first). Fall through on
+   *   2. Probe each allowed origin in preferred order (app.* by default; ea.*
+   *      first when Early Access is enabled). Fall through on
    *      auth-shaped errors and on "plugin API not ready" for probe tabs we
    *      opened ourselves. Surface all other errors immediately.
    *   3. If every origin rejects the key, throw a combined auth error.
@@ -749,7 +776,8 @@
   async function detectPLOrigin(apiKey) {
     const cached = await getCachedPLOrigin();
     if (cached) return { origin: cached };
-    for (const origin of PL_ORIGINS) {
+    const origins = await getPlOrigins();
+    for (const origin of origins) {
       const probe = await probeOriginWithKey(origin, apiKey);
       if (probe.success) {
         await setCachedPLOrigin(origin);
@@ -758,7 +786,7 @@
       if (probe.fallThrough) continue;
       throw new Error(probe.error || 'Unknown ProjectionLab error');
     }
-    const hostList = PL_ORIGINS.map((o) => o.replace('https://', '')).join(' or ');
+    const hostList = origins.map((o) => o.replace('https://', '')).join(' or ');
     throw new Error(
       `Your ProjectionLab API key wasn't accepted by ${hostList}. Double-check the key and try again.`
     );
