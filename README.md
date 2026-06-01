@@ -10,11 +10,12 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.0.5 (2026-05-31)
+## 📣 Release Announcement — v1.0.6 (2026-06-01)
 
-This release restores Monarch syncing after an upstream change broke it, makes
-ProjectionLab Early Access a manual opt-in, and folds in several reliability
-fixes contributed by the community.
+This release makes Chrysalis work on Chromium browsers beyond Google Chrome. It
+also carries forward everything from v1.0.5: restored Monarch syncing after an
+upstream change broke it, ProjectionLab Early Access as a manual opt-in, and
+several reliability fixes contributed by the community.
 
 ### ⚠️ Action needed — ProjectionLab Early Access users only
 
@@ -25,6 +26,13 @@ nothing — Chrysalis now uses the standard `app.projectionlab.com` by default.
 
 ### What's new & fixed
 
+- **Fixed: works on Chromium browsers beyond Chrome.** The popup’s **Setup**
+  button silently did nothing on Chromium-based browsers other than Google Chrome
+  — including **Dia, Arc, Brave, Microsoft Edge, Opera, and Vivaldi** — because
+  those browsers don’t implement `chrome.runtime.openOptionsPage()` reliably.
+  Chrysalis now opens the setup page with a portable method that works
+  everywhere, so the Setup button works on those browsers as well as Chrome
+  itself.
 - **Fixed: Monarch “Failed to fetch.”** Monarch changed how its API
   authenticates, which broke account loading and balance sync for everyone.
   Chrysalis now authenticates with the Monarch tab's CSRF token (read in-page via
