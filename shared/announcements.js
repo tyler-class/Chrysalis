@@ -33,6 +33,23 @@
   // ─── Edit this list to publish announcements ──────────────────────────────
   const ANNOUNCEMENTS = [
     {
+      id: 'v1.0.6',
+      title: 'New release — v1.0.6',
+      body:
+        '<strong>Now works beyond Chrome.</strong> The popup’s Setup button did ' +
+        'nothing on Chromium browsers other than Google Chrome (e.g. Dia, Arc, ' +
+        'Brave, Edge, Opera, Vivaldi); it now opens correctly on all of them, as ' +
+        'well as Chrome itself.<br><br>' +
+        'Still included from v1.0.5: the Monarch “Failed to fetch” fix and the new ' +
+        '<strong>ProjectionLab Early Access</strong> toggle, plus reliability fixes. ' +
+        'If your ProjectionLab account is on Early Access, open ' +
+        '<strong>Setup → ProjectionLab Settings</strong> and turn on ' +
+        '“Opt in to ProjectionLab Early Access” — it’s a manual step.',
+      linkText: 'Read the full release notes ↗',
+      linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
+      expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
+    },
+    {
       id: 'v1.0.5',
       title: 'New release — v1.0.5',
       body:

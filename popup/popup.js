@@ -100,7 +100,7 @@
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
       </div>
     `;
-    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.runtime.openOptionsPage();
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
   function renderMappingStorageError(error) {
@@ -113,7 +113,7 @@
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
       </div>
     `;
-    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.runtime.openOptionsPage();
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
   function renderNotOnMonarch(plCount, monarchTotal) {
@@ -423,7 +423,7 @@
   }
 
   async function init() {
-    document.getElementById('open-setup').onclick = () => chrome.runtime.openOptionsPage();
+    document.getElementById('open-setup').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const tabUrl = tab?.url || '';
