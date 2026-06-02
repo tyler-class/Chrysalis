@@ -6,11 +6,7 @@
 
 <strong>Sync Monarch Money balances into ProjectionLab — in one click.</strong>
 
-<p>
-  <img src="https://img.shields.io/badge/Monarch-source-ef6c2b?style=flat-square" alt="Monarch (source)">
-  <img src="https://img.shields.io/badge/%E2%86%92-1b1a14?style=flat-square" alt="to">
-  <img src="https://img.shields.io/badge/ProjectionLab-destination-2f6bff?style=flat-square" alt="ProjectionLab (destination)">
-</p>
+<p>🟧 <strong>Monarch</strong> <em>(source)</em> &nbsp;→&nbsp; 🟦 <strong>ProjectionLab</strong> <em>(destination)</em></p>
 
 <p>
   <a href="https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood"><img src="https://img.shields.io/badge/Add%20to%20Chrome-1b1a14?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Add to Chrome"></a>
