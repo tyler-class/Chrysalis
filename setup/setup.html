@@ -577,6 +577,15 @@
       border-radius: 8px;
     }
     .remove-row:hover { color: var(--red); background: #fef2f2; }
+    .map-gate {
+      padding: 22px 22px;
+      background: var(--canvas-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      color: var(--ink-2);
+      font-size: 14.5px;
+      line-height: 1.55;
+    }
     .add-row-wrap { margin-top: 14px; }
     .add-row-btn {
       font-family: inherit;
@@ -921,6 +930,10 @@
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="step-body" id="step3-body">
+      <div class="map-gate" id="map-gate" style="display:none">
+        Before you can map accounts, save your ProjectionLab API key in Step 1 above, then load accounts from Monarch and ProjectionLab.
+      </div>
+      <div id="map-content">
       <p class="hint">
         For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.
         For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.
@@ -943,6 +956,7 @@
           <span aria-hidden="true">✓</span>
           <span>All ProjectionLab accounts are mapped</span>
         </div>
+      </div>
       </div>
       <div class="error-msg" id="save-error"></div>
       </div>

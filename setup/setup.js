@@ -629,6 +629,7 @@
     await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', true);
+    updateMapGate();
     setFinalLoadStatus(document.getElementById('key-saved-msg'), 'Key saved!');
   };
 
@@ -640,6 +641,7 @@
     updateChips();
     updateStepComplete('step1', false);
     setStepCollapsed('step1', false);
+    updateMapGate();
     setFinalLoadStatus(document.getElementById('key-saved-msg'), 'API key cleared.');
   };
 
@@ -1892,6 +1894,18 @@
     };
   }
 
+  // Gate the mapping UI: only show the table once the PL key is saved AND
+  // both account lists are loaded (loading PL accounts requires a working key,
+  // so a loaded PL list is the de-facto "validated" signal). Otherwise show
+  // an instructional message in its place.
+  function updateMapGate() {
+    const canMap = !!(plApiKey && plApiKey.trim()) && monarchAccounts.length > 0 && plAccounts.length > 0;
+    const gate = document.getElementById('map-gate');
+    const content = document.getElementById('map-content');
+    if (gate) gate.style.display = canMap ? 'none' : '';
+    if (content) content.style.display = canMap ? '' : 'none';
+  }
+
   function renderMappingRows() {
     const tbody = document.getElementById('map-tbody');
     tbody.innerHTML = '';
@@ -1923,6 +1937,7 @@
       addRowBtn.style.display = noneLeft ? 'none' : '';
       allMappedMsg.style.display = noneLeft ? 'block' : 'none';
     }
+    updateMapGate();
   }
 
   document.getElementById('add-row').onclick = () => {
