@@ -166,9 +166,20 @@
       chipPlText.textContent = 'ProjectionLab API — not configured';
     }
 
-    const mappings = accountMappings;
-    const plCount = mappings.length;
-    const monarchTotal = mappings.reduce((sum, m) => {
+    // A row only counts as mapped once it has a ProjectionLab account AND
+    // at least one Monarch account selected in that same row (matching the
+    // step-3 completion logic, including asset-with-loan rows).
+    const completeMappings = accountMappings.filter((m) => {
+      if (!m.plId) return false;
+      if (isAssetWithLoanMapping(m)) {
+        const valueCount = m.monarchAccounts?.length || 0;
+        const loanCount = m.monarchAccountsLoan?.length || 0;
+        return valueCount + loanCount > 0;
+      }
+      return (m.monarchAccounts?.length || 0) > 0;
+    });
+    const plCount = completeMappings.length;
+    const monarchTotal = completeMappings.reduce((sum, m) => {
       const value = m.monarchAccounts?.length || 0;
       const loan = isAssetWithLoanMapping(m) ? (m.monarchAccountsLoan?.length || 0) : 0;
       return sum + value + loan;
