@@ -672,9 +672,10 @@
     .advanced-card:not(.advanced-locked) { background: var(--card); }
     /* Bolt badge for the Advanced step number slot */
     .advanced-card .step-num {
-      background: #fff3df;
-      font-size: 15px;
+      background: #fbe3bf;
+      color: var(--monarch-ink);
     }
+    .advanced-card .step-num svg { display: block; }
     .advanced-head .step-chevron { margin-left: auto; color: var(--ink-3); }
     .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
     .advanced-section-label {
@@ -1014,7 +1015,7 @@
 
       <div class="step-card advanced-card collapsed advanced-locked" id="advanced-card">
       <div class="advanced-head step-head" tabindex="0" role="button" aria-expanded="false" aria-controls="advanced-body">
-        <span class="step-num" aria-hidden="true">⚡️</span>
+        <span class="step-num" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></span>
         <span class="step-title">Advanced</span>
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
