@@ -19,7 +19,7 @@
  *   }
  *
  * Dismissal model (recommended approach): we store the SET of dismissed
- * announcement ids in chrome.storage.local under `dismissedAnnouncements`.
+ * announcement ids in browser.storage.local under `dismissedAnnouncements`.
  * Keying dismissal by a unique id — rather than a single boolean we'd have to
  * remember to reset — means a brand-new announcement is never in the dismissed
  * set, so an old dismissal can NEVER suppress a future announcement. There is no
@@ -61,7 +61,7 @@
 
   async function getDismissed() {
     try {
-      const r = await chrome.storage.local.get([STORAGE_KEY]);
+      const r = await browser.storage.local.get([STORAGE_KEY]);
       return Array.isArray(r[STORAGE_KEY]) ? r[STORAGE_KEY] : [];
     } catch (_) {
       return [];
@@ -88,7 +88,7 @@
         ANNOUNCEMENTS.filter((a) => isActive(a, now)).map((a) => a.id)
       );
       const pruned = dismissed.filter((d) => liveIds.has(d));
-      await chrome.storage.local.set({ [STORAGE_KEY]: pruned });
+      await browser.storage.local.set({ [STORAGE_KEY]: pruned });
     } catch (_) {}
   }
 

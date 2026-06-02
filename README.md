@@ -64,7 +64,7 @@ There are a couple of workarounds floating around the internet, but they had var
 
 ## ✅ Requirements
 
-- Google Chrome or a Chromium browser (I like Dia)
+- Google Chrome or a Chromium browser (I like Dia), **or Firefox 128+**
 - A [Monarch Money](https://monarchmoney.com) account
 - A [ProjectionLab](https://projectionlab.com) account with Plugins enabled
 - Your accounts must already exist in ProjectionLab (Chrysalis updatesPL  balances, it cannot create accounts)
@@ -291,6 +291,64 @@ Check the sync result detail in the popup — if a many-to-one mapping is partia
 
 ---
 
+## 🧱 Building from source (Chrome & Firefox)
+
+Chrysalis ships from **one shared source tree** that builds both a Chrome and a
+Firefox extension. The only things that differ per browser are the manifest and
+a thin `browser.*` compatibility shim — all business logic, content scripts, and
+background logic are shared.
+
+### How it's wired
+
+- **Source** lives at the repo root (`background/`, `content-scripts/`,
+  `popup/`, `setup/`, `sync-history/`, `shared/`). All extension code calls the
+  promise-based **`browser.*`** API.
+- **`webextension-polyfill`** is inlined into every bundle at build time
+  (via esbuild's `inject`), so `browser.*` works identically on Chrome
+  (where it wraps `chrome.*`) and Firefox (native).
+- **Manifests** are composed from `manifests/manifest.base.json` plus a small
+  per-browser override (`manifest.chrome.json` / `manifest.firefox.json`). Chrome
+  uses `background.service_worker`; Firefox uses `background.scripts` (event
+  page), because Firefox does not support service-worker backgrounds.
+- **`scripts/build.mjs`** bundles each entrypoint with esbuild and emits a
+  ready-to-load extension into **`dist/chrome`** and **`dist/firefox`**.
+
+### Commands
+
+```bash
+npm install            # one-time: esbuild, web-ext, webextension-polyfill
+
+npm run build          # build BOTH targets → dist/chrome and dist/firefox
+npm run build:chrome   # build only dist/chrome
+npm run build:firefox  # build only dist/firefox
+
+npm run lint:firefox   # web-ext lint on dist/firefox (manifest + compat checks)
+npm run start:firefox  # web-ext run: launch Firefox with the extension loaded
+```
+
+To load a build manually:
+
+- **Chrome:** `chrome://extensions` → enable Developer mode → **Load unpacked** →
+  select `dist/chrome`.
+- **Firefox:** `about:debugging#/runtime/this-firefox` → **Load Temporary
+  Add-on** → pick any file inside `dist/firefox` (or use `npm run start:firefox`).
+
+> **Note:** you now load the built `dist/<browser>` folder, not the repo root.
+> The repo root is no longer directly loadable because the source uses ES module
+> imports that the build resolves.
+
+### Firefox specifics
+
+- **Minimum Firefox version is 128** (`strict_min_version` in the Firefox
+  manifest). This is required: the ProjectionLab sync relies on
+  `scripting.executeScript({ world: "MAIN" })`, which Firefox only supports from
+  version 128.
+- **The `browser_specific_settings.gecko.id` in `manifests/manifest.firefox.json`
+  is a placeholder** (`PLACEHOLDER-REPLACE-ME@chrysalis.example`). Replace it with
+  the real extension ID before submitting to AMO.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome, especially fixes when Monarch or ProjectionLab change their APIs.
@@ -303,7 +361,7 @@ When you [open an Issue](https://github.com/tyler-class/Chrysalis/issues), pleas
 
 - What error you saw (exact text)
 - Whether the Monarch web app itself was working normally at the time
-- Your Chrome version
+- Your browser and version (e.g. Chrome 138, Firefox 130)
 
 ---
 

@@ -39,10 +39,14 @@
 
   function getSyncStorage(storageArea) {
     if (storageArea) return storageArea;
-    if (!global.chrome || !global.chrome.storage || !global.chrome.storage.sync) {
-      throw new Error('Chrome sync storage is not available.');
+    // `browser` is provided by the webextension-polyfill shim that esbuild
+    // injects at build time (native promise-based browser.* on Firefox, a
+    // wrapper over chrome.* on Chrome). The optional storageArea param above
+    // keeps this unit-testable with an injected fake.
+    if (typeof browser === 'undefined' || !browser.storage || !browser.storage.sync) {
+      throw new Error('Extension sync storage is not available.');
     }
-    return global.chrome.storage.sync;
+    return browser.storage.sync;
   }
 
   async function getPreviousChunkCount(storageArea) {

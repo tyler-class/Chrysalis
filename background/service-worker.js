@@ -8,14 +8,14 @@ import '../shared/mapping-storage.js';
 
 // ProjectionLab origins. By default Chrysalis only uses the standard app.*
 // instance. Early Access users opt in via the setup toggle
-// (chrome.storage.sync.plUseEarlyAccess), which makes ea.* the preferred origin
+// (browser.storage.sync.plUseEarlyAccess), which makes ea.* the preferred origin
 // with app.* kept as a fallback. ALL_PL_ORIGINS is the full set, used only to
 // recognize a PL URL regardless of the user's preference.
 const APP_PL_ORIGIN = 'https://app.projectionlab.com';
 const EA_PL_ORIGIN = 'https://ea.projectionlab.com';
 const ALL_PL_ORIGINS = [EA_PL_ORIGIN, APP_PL_ORIGIN];
 async function getPlOrigins() {
-  const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+  const { plUseEarlyAccess } = await browser.storage.sync.get(['plUseEarlyAccess']);
   return plUseEarlyAccess ? [EA_PL_ORIGIN, APP_PL_ORIGIN] : [APP_PL_ORIGIN];
 }
 const MONARCH_ORIGIN = 'https://app.monarch.com';
@@ -80,7 +80,7 @@ function buildPayloadAssetWithLoan(update) {
 
 async function findPLTab() {
   const origins = await getPlOrigins();
-  const tabs = await chrome.tabs.query({ url: origins.map((o) => o + '/*') });
+  const tabs = await browser.tabs.query({ url: origins.map((o) => o + '/*') });
   if (!tabs.length) return null;
   const originIndex = (url) => {
     const idx = origins.findIndex((o) => typeof url === 'string' && url.startsWith(o));
@@ -102,7 +102,7 @@ async function findPLTab() {
 }
 
 async function findMonarchTab() {
-  const tabs = await chrome.tabs.query({ url: MONARCH_ORIGIN + '/*' });
+  const tabs = await browser.tabs.query({ url: MONARCH_ORIGIN + '/*' });
   if (!tabs.length) return null;
   const sorted = [...tabs].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   return sorted[0] || null;
@@ -136,7 +136,7 @@ async function updateViaHttp(apiKey, plId, data, origin) {
  * Returns array of { plId, success, error }.
  */
 async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
-  const results = await chrome.scripting.executeScript({
+  const results = await browser.scripting.executeScript({
     target: { tabId: plTabId },
     world: 'MAIN',
     func: async (updatesJson, key) => {
@@ -269,7 +269,7 @@ async function runSyncWithTabId(tabId) {
   let rawMappings;
   try {
     [sync, rawMappings] = await Promise.all([
-      chrome.storage.sync.get(['plApiKey']),
+      browser.storage.sync.get(['plApiKey']),
       globalThis.ChrysalisMappingStorage.loadMappings(),
     ]);
   } catch (e) {
@@ -299,11 +299,11 @@ async function runSyncWithTabId(tabId) {
 
     let balanceResponse;
     try {
-      await chrome.scripting.executeScript({
+      await browser.scripting.executeScript({
         target: { tabId },
         files: ['content-scripts/monarch.js'],
       });
-      balanceResponse = await chrome.tabs.sendMessage(tabId, {
+      balanceResponse = await browser.tabs.sendMessage(tabId, {
         type: 'FETCH_BALANCES',
         accountIds: allMonarchIds,
       });
@@ -480,7 +480,7 @@ async function runSyncWithTabId(tabId) {
         plResults = await runPLUpdatesInTab(plTab.id, updatesWithPayload, plApiKey);
         // Persist the origin we just synced against so HTTP fallback on future runs
         // knows which instance to hit.
-        try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
+        try { await browser.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
         // No PL tab open — fall back to HTTP. Prefer the cached origin (set by
         // a previous successful in-page sync or by setup's detectPLOrigin), but
@@ -488,7 +488,7 @@ async function runSyncWithTabId(tabId) {
         // Otherwise use the preferred origin for that setting (app.* unless the
         // user has opted into Early Access). This auto-corrects a stale ea.*
         // cache after the user turns Early Access back off.
-        const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
+        const { plOrigin: cachedOrigin } = await browser.storage.local.get(['plOrigin']);
         const httpOrigins = await getPlOrigins();
         const httpOrigin =
           cachedOrigin && httpOrigins.includes(cachedOrigin)
@@ -559,12 +559,12 @@ async function runSyncWithTabId(tabId) {
         })),
     };
     const now = Date.now();
-    const { syncHistoryRetentionDays } = await chrome.storage.sync.get(['syncHistoryRetentionDays']).then((s) => s || {});
+    const { syncHistoryRetentionDays } = await browser.storage.sync.get(['syncHistoryRetentionDays']).then((s) => s || {});
     const retentionMs =
       typeof syncHistoryRetentionDays === 'number' && syncHistoryRetentionDays >= 1
         ? syncHistoryRetentionDays * 24 * 60 * 60 * 1000
         : null;
-    const { syncHistory: prevHistory = [] } = await chrome.storage.local.get(['syncHistory']);
+    const { syncHistory: prevHistory = [] } = await browser.storage.local.get(['syncHistory']);
     const appended = [...prevHistory, {
       time: now,
       successCount,
@@ -586,7 +586,7 @@ async function runSyncWithTabId(tabId) {
     }];
     const syncHistory =
       retentionMs != null ? appended.filter((e) => now - e.time <= retentionMs) : appended;
-    await chrome.storage.local.set({
+    await browser.storage.local.set({
       lastSyncTime: now,
       lastSyncResults: results,
       lastSyncDebug,
@@ -600,7 +600,7 @@ async function runSyncWithTabId(tabId) {
   };
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type == 'RUN_SYNC') {
       const tabId = message.tabId;
       if (tabId == null) {
@@ -615,7 +615,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       return true;
   } else if (message.type == 'GET_MONARCH_CSRF_TOKEN') {
-    chrome.scripting.executeScript({
+    browser.scripting.executeScript({
       target: { tabId: sender.tab.id },
       world: 'MAIN',
       func: () => {
@@ -631,7 +631,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== AUTO_SYNC_ALARM) return;
   const monarchTab = await findMonarchTab();
   if (!monarchTab) return;
@@ -690,28 +690,27 @@ function getNextRunTs(now, sync) {
   return next.getTime();
 }
 
-function scheduleAutoSync() {
-  chrome.storage.sync.get(
-    [
-      'autoSyncEnabled',
-      'autoSyncFrequency',
-      'autoSyncDayOfWeek',
-      'autoSyncDayOfMonth',
-      'autoSyncTimeHour',
-      'autoSyncTimeMinute',
-    ],
-    (sync) => {
-      chrome.alarms.clear(AUTO_SYNC_ALARM);
-      if (!sync.autoSyncEnabled || !sync.autoSyncFrequency) return;
-      const when = getNextRunTs(new Date(), sync);
-      chrome.alarms.create(AUTO_SYNC_ALARM, { when });
-    }
-  );
+async function scheduleAutoSync() {
+  // Promise-based (webextension-polyfill); no Chrome-style callback. Kept
+  // event-page-safe: re-reads schedule from storage on every invocation rather
+  // than holding state in a background global that can be suspended.
+  const sync = await browser.storage.sync.get([
+    'autoSyncEnabled',
+    'autoSyncFrequency',
+    'autoSyncDayOfWeek',
+    'autoSyncDayOfMonth',
+    'autoSyncTimeHour',
+    'autoSyncTimeMinute',
+  ]);
+  await browser.alarms.clear(AUTO_SYNC_ALARM);
+  if (!sync.autoSyncEnabled || !sync.autoSyncFrequency) return;
+  const when = getNextRunTs(new Date(), sync);
+  await browser.alarms.create(AUTO_SYNC_ALARM, { when });
 }
 
-chrome.runtime.onStartup.addListener(scheduleAutoSync);
+browser.runtime.onStartup.addListener(scheduleAutoSync);
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
+browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'sync') return;
   const keys = [
     'autoSyncEnabled',

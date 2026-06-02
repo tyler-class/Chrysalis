@@ -42,8 +42,8 @@
   }
 
   function renderList(history) {
-    const listUrl = chrome.runtime.getURL('sync-history/sync-history.html');
-    const setupUrl = chrome.runtime.getURL('setup/setup.html');
+    const listUrl = browser.runtime.getURL('sync-history/sync-history.html');
+    const setupUrl = browser.runtime.getURL('setup/setup.html');
     const rows = (history || [])
       .slice()
       .reverse()
@@ -64,8 +64,8 @@
   }
 
   function renderDetail(entry, showDebug) {
-    const listUrl = chrome.runtime.getURL('sync-history/sync-history.html');
-    const setupUrl = chrome.runtime.getURL('setup/setup.html');
+    const listUrl = browser.runtime.getURL('sync-history/sync-history.html');
+    const setupUrl = browser.runtime.getURL('setup/setup.html');
     const results = entry.results || [];
     const rows = results
       .map((r) => {
@@ -149,8 +149,8 @@
     const params = new URLSearchParams(location.search);
     const t = params.get('t');
     const [{ syncHistory = [] }, syncPrefs] = await Promise.all([
-      chrome.storage.local.get(['syncHistory']),
-      chrome.storage.sync.get(['showDebugOnPopup']),
+      browser.storage.local.get(['syncHistory']),
+      browser.storage.sync.get(['showDebugOnPopup']),
     ]);
     const showDebug = !!syncPrefs.showDebugOnPopup;
 
@@ -161,7 +161,7 @@
         app.innerHTML = renderDetail(entry, showDebug);
       } else {
         app.innerHTML = `
-          <nav class="nav"><a href="${chrome.runtime.getURL('sync-history/sync-history.html')}">← Back to sync history</a></nav>
+          <nav class="nav"><a href="${browser.runtime.getURL('sync-history/sync-history.html')}">← Back to sync history</a></nav>
           <h1>Sync run not found</h1>
           <p class="sub">That run may have been removed by retention settings or the history was cleared.</p>
         `;

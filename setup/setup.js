@@ -2,17 +2,22 @@
  * Setup page — API key, load Monarch/PL accounts, map accounts (many-to-one). Schema migration for old flat mappings.
  */
 
+// Bundled into this entrypoint by esbuild; its IIFE publishes
+// window.ChrysalisMappingStorage, which the code below reads. (Replaces the
+// separate <script> tag the HTML used to load before the build step existed.)
+import '../shared/mapping-storage.js';
+
 (function () {
   // ProjectionLab origins. By default Chrysalis only uses the standard app.*
   // instance. Early Access users opt in via the Step 1 toggle
-  // (chrome.storage.sync.plUseEarlyAccess), which makes ea.* the preferred
+  // (browser.storage.sync.plUseEarlyAccess), which makes ea.* the preferred
   // origin with app.* kept as a fallback. ALL_PL_ORIGINS is the full set, used
   // only to recognize a PL URL regardless of the user's preference.
   const APP_PL_ORIGIN = 'https://app.projectionlab.com';
   const EA_PL_ORIGIN = 'https://ea.projectionlab.com';
   const ALL_PL_ORIGINS = [EA_PL_ORIGIN, APP_PL_ORIGIN];
   async function getPlOrigins() {
-    const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+    const { plUseEarlyAccess } = await browser.storage.sync.get(['plUseEarlyAccess']);
     return plUseEarlyAccess ? [EA_PL_ORIGIN, APP_PL_ORIGIN] : [APP_PL_ORIGIN];
   }
   const MONARCH_ORIGIN = 'https://app.monarch.com';
@@ -26,7 +31,7 @@
     return ALL_PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
   }
   async function getCachedPLOrigin() {
-    const { plOrigin } = await chrome.storage.local.get(['plOrigin']);
+    const { plOrigin } = await browser.storage.local.get(['plOrigin']);
     if (!plOrigin) return null;
     // Ignore a cached origin that the current Early Access setting disallows
     // (e.g. a stale ea.* cache after the user turned Early Access back off).
@@ -35,11 +40,11 @@
   }
   async function setCachedPLOrigin(origin) {
     if (origin && ALL_PL_ORIGINS.includes(origin)) {
-      await chrome.storage.local.set({ plOrigin: origin });
+      await browser.storage.local.set({ plOrigin: origin });
     }
   }
   async function clearCachedPLOrigin() {
-    try { await chrome.storage.local.remove(['plOrigin']); } catch (_) {}
+    try { await browser.storage.local.remove(['plOrigin']); } catch (_) {}
   }
   function isAuthLikeError(message) {
     if (!message) return false;
@@ -318,11 +323,11 @@
 
     const showDebugCheckbox = document.getElementById('show-debug-popup');
     if (showDebugCheckbox) {
-      chrome.storage.sync.get(['showDebugOnPopup'], (sync) => {
+      browser.storage.sync.get(['showDebugOnPopup']).then((sync) => {
         showDebugCheckbox.checked = !!sync.showDebugOnPopup;
       });
       showDebugCheckbox.addEventListener('change', () => {
-        chrome.storage.sync.set({ showDebugOnPopup: showDebugCheckbox.checked });
+        browser.storage.sync.set({ showDebugOnPopup: showDebugCheckbox.checked });
       });
     }
 
@@ -331,11 +336,11 @@
     // the endpoint under the new setting instead of reusing a now-disallowed one.
     const earlyAccessCheckbox = document.getElementById('pl-early-access');
     if (earlyAccessCheckbox) {
-      chrome.storage.sync.get(['plUseEarlyAccess'], (sync) => {
+      browser.storage.sync.get(['plUseEarlyAccess']).then((sync) => {
         earlyAccessCheckbox.checked = !!sync.plUseEarlyAccess;
       });
       earlyAccessCheckbox.addEventListener('change', async () => {
-        await chrome.storage.sync.set({ plUseEarlyAccess: earlyAccessCheckbox.checked });
+        await browser.storage.sync.set({ plUseEarlyAccess: earlyAccessCheckbox.checked });
         await clearCachedPLOrigin();
       });
     }
@@ -377,7 +382,7 @@
       const dayOfMonth = autoSyncDayMonth ? parseInt(autoSyncDayMonth.value, 10) : 1;
       const timeStr = (autoSyncTime && autoSyncTime.value) || '09:00';
       const [h, m] = timeStr.split(':').map((n) => parseInt(n, 10) || 0);
-      chrome.storage.sync.set({
+      browser.storage.sync.set({
         autoSyncEnabled: enabled,
         autoSyncFrequency: enabled ? freq : '',
         autoSyncDayOfWeek: dayOfWeek,
@@ -388,7 +393,7 @@
     }
 
     if (autoSyncCheckbox && autoSyncFrequency && autoSyncTime) {
-      chrome.storage.sync.get(
+      browser.storage.sync.get(
         ['autoSyncEnabled', 'autoSyncFrequency', 'autoSyncDayOfWeek', 'autoSyncDayOfMonth', 'autoSyncTimeHour', 'autoSyncTimeMinute'],
         (sync) => {
           autoSyncCheckbox.checked = !!sync.autoSyncEnabled;
@@ -410,7 +415,7 @@
 
     const syncHistoryRetentionInput = document.getElementById('sync-history-retention-days');
     if (syncHistoryRetentionInput) {
-      chrome.storage.sync.get(['syncHistoryRetentionDays'], (sync) => {
+      browser.storage.sync.get(['syncHistoryRetentionDays']).then((sync) => {
         const v = sync.syncHistoryRetentionDays;
         syncHistoryRetentionInput.value = (v != null && Number.isInteger(v) && v >= 1) ? String(v) : '';
       });
@@ -418,20 +423,20 @@
         const raw = syncHistoryRetentionInput.value.trim();
         const n = raw === '' ? null : parseInt(raw, 10);
         const toSave = (n != null && !Number.isNaN(n) && n >= 1) ? n : null;
-        chrome.storage.sync.set({ syncHistoryRetentionDays: toSave });
+        browser.storage.sync.set({ syncHistoryRetentionDays: toSave });
       });
       syncHistoryRetentionInput.addEventListener('blur', () => {
         const raw = syncHistoryRetentionInput.value.trim();
         const n = raw === '' ? null : parseInt(raw, 10);
         const toSave = (n != null && !Number.isNaN(n) && n >= 1) ? n : null;
-        chrome.storage.sync.set({ syncHistoryRetentionDays: toSave });
+        browser.storage.sync.set({ syncHistoryRetentionDays: toSave });
       });
     }
 
     document.getElementById('clear-cache').addEventListener('click', async () => {
       if (card.classList.contains('advanced-locked')) return;
       if (!confirm('Clear all cached data? You will need to load Monarch and ProjectionLab accounts again. Your API key and saved mappings will be kept.')) return;
-      await chrome.storage.local.clear();
+      await browser.storage.local.clear();
       monarchAccounts = [];
       plAccounts = [];
       updateChips();
@@ -460,9 +465,9 @@
       monarchAccounts = [];
       plAccounts = [];
       accountMappings = [];
-      await chrome.storage.sync.set({ plApiKey: '', autoSyncEnabled: false });
+      await browser.storage.sync.set({ plApiKey: '', autoSyncEnabled: false });
       if (!(await saveMappingsToStorage(accountMappings))) return;
-      await chrome.storage.local.clear();
+      await browser.storage.local.clear();
       updateChips();
       updateStepComplete('step1', false);
       updateStepComplete('step2', false);
@@ -568,7 +573,7 @@
   }
 
   function getStep2IconUrl(name) {
-    return chrome.runtime.getURL('icons/' + name);
+    return browser.runtime.getURL('icons/' + name);
   }
 
   function restoreStep2Buttons() {
@@ -592,9 +597,9 @@
 
   function setHeaderLogoUrl() {
     const logo = document.getElementById('header-logo');
-    if (logo) logo.src = chrome.runtime.getURL('icons/Chrysalis-Logo.svg');
+    if (logo) logo.src = browser.runtime.getURL('icons/Chrysalis-Logo.svg');
     const syncHistoryLink = document.getElementById('setup-sync-history-link');
-    if (syncHistoryLink) syncHistoryLink.href = chrome.runtime.getURL('sync-history/sync-history.html');
+    if (syncHistoryLink) syncHistoryLink.href = browser.runtime.getURL('sync-history/sync-history.html');
   }
 
   function updateStep2Buttons() {
@@ -613,8 +618,8 @@
 
   async function loadStorage() {
     const [sync, local] = await Promise.all([
-      chrome.storage.sync.get(['plApiKey']),
-      chrome.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']),
+      browser.storage.sync.get(['plApiKey']),
+      browser.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']),
     ]);
     let rawMappings = [];
     try {
@@ -674,7 +679,7 @@
     const key = document.getElementById('pl-key').value.trim();
     if (!key) return;
     plApiKey = key;
-    await chrome.storage.sync.set({ plApiKey: key });
+    await browser.storage.sync.set({ plApiKey: key });
     // A saved key may belong to a different instance than the previously cached
     // one — drop the cache so the next "Load Accounts" re-runs detection.
     await clearCachedPLOrigin();
@@ -687,7 +692,7 @@
   document.getElementById('clear-key').onclick = async () => {
     document.getElementById('pl-key').value = '';
     plApiKey = '';
-    await chrome.storage.sync.remove('plApiKey');
+    await browser.storage.sync.remove('plApiKey');
     await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', false);
@@ -697,7 +702,7 @@
   };
 
   async function findMonarchTab() {
-    const tabs = await chrome.tabs.query({ url: MONARCH_ORIGIN + '/*' });
+    const tabs = await browser.tabs.query({ url: MONARCH_ORIGIN + '/*' });
     return tabs.length ? tabs[0] : null;
   }
 
@@ -714,23 +719,23 @@
    * the caller is responsible for closing it on failure.
    */
   async function findOrOpenPLTabForOrigin(origin, { openInBackground = false } = {}) {
-    const tabs = await chrome.tabs.query({ url: origin + '/*' });
+    const tabs = await browser.tabs.query({ url: origin + '/*' });
     if (tabs.length) {
       const appTab = tabs.find((t) => isPLAppTab(t.url));
       return { tab: appTab || tabs[0], openedByUs: false };
     }
-    const tab = await chrome.tabs.create({ url: origin + '/', active: !openInBackground });
+    const tab = await browser.tabs.create({ url: origin + '/', active: !openInBackground });
     const loaded = await new Promise((resolve) => {
       const listener = (id, info, t) => {
         if (id !== tab.id) return;
         if (info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
+          browser.tabs.onUpdated.removeListener(listener);
           setTimeout(() => resolve(t), PL_LOAD_DELAY_MS);
         }
       };
-      chrome.tabs.onUpdated.addListener(listener);
+      browser.tabs.onUpdated.addListener(listener);
       if (tab.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(listener);
+        browser.tabs.onUpdated.removeListener(listener);
         setTimeout(() => resolve(tab), PL_LOAD_DELAY_MS);
       }
     });
@@ -753,7 +758,7 @@
     }
     const origins = await getPlOrigins();
     for (const origin of origins) {
-      const tabs = await chrome.tabs.query({ url: origin + '/*' });
+      const tabs = await browser.tabs.query({ url: origin + '/*' });
       if (tabs.length) {
         const appTab = tabs.find((t) => isPLAppTab(t.url));
         return { tab: appTab || tabs[0], openedByUs: false, origin };
@@ -810,7 +815,7 @@
     }
 
     if (!outcome.success && openedByUs && tab && tab.id != null) {
-      try { await chrome.tabs.remove(tab.id); } catch (_) {}
+      try { await browser.tabs.remove(tab.id); } catch (_) {}
     }
     return outcome;
   }
@@ -846,7 +851,7 @@
   }
 
   function runPLExportScript(tabId, apiKey) {
-    return chrome.scripting.executeScript({
+    return browser.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
       func: async (key, waitMs, pollMs) => {
@@ -878,7 +883,7 @@
   }
 
   async function fetchPLAccounts() {
-    const key = plApiKey && plApiKey.trim() ? plApiKey : (await chrome.storage.sync.get(['plApiKey'])).plApiKey;
+    const key = plApiKey && plApiKey.trim() ? plApiKey : (await browser.storage.sync.get(['plApiKey'])).plApiKey;
     if (!key) throw new Error('Save your ProjectionLab API key first.');
 
     // Detect which instance this key belongs to (or use cached origin).
@@ -964,12 +969,12 @@
 
       status.textContent = 'Fetching Monarch accounts… (can take 30–60 sec)';
 
-      await chrome.scripting.executeScript({
+      await browser.scripting.executeScript({
         target: { tabId: monarchTab.id },
         files: ['content-scripts/monarch.js'],
       });
 
-      const monarchPromise = chrome.tabs.sendMessage(monarchTab.id, { type: 'FETCH_ACCOUNTS' });
+      const monarchPromise = browser.tabs.sendMessage(monarchTab.id, { type: 'FETCH_ACCOUNTS' });
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('timeout')), LOAD_ACCOUNTS_TIMEOUT_MS);
       });
@@ -977,11 +982,11 @@
 
       if (monarchRes && monarchRes.success) {
         monarchAccounts = monarchRes.accounts || [];
-        await chrome.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
+        await browser.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
         reconcileMappingsWithAccounts();
         setFinalLoadStatus(status, `Loaded ${monarchAccounts.length} Monarch accounts.`, () => {
           const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
+          browser.storage.local.set({ lastMonarchRefreshTime: now });
           status.textContent = formatLastRefreshed(now);
         });
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
@@ -989,7 +994,7 @@
       } else {
         setFinalLoadStatus(status, 'Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'), () => {
           const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
+          browser.storage.local.set({ lastMonarchRefreshTime: now });
           status.textContent = formatLastRefreshed(now);
         });
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
@@ -998,13 +1003,13 @@
       if (e.message === 'timeout') {
         setFinalLoadStatus(status, 'Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.', () => {
           const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
+          browser.storage.local.set({ lastMonarchRefreshTime: now });
           status.textContent = formatLastRefreshed(now);
         });
       } else {
         setFinalLoadStatus(status, 'Error: ' + (e.message || String(e)), () => {
           const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
+          browser.storage.local.set({ lastMonarchRefreshTime: now });
           status.textContent = formatLastRefreshed(now);
         });
       }
@@ -1024,11 +1029,11 @@
 
     try {
       plAccounts = await fetchPLAccounts();
-      await chrome.storage.local.set({ cachedPLAccounts: plAccounts });
+      await browser.storage.local.set({ cachedPLAccounts: plAccounts });
       reconcileMappingsWithAccounts();
       setFinalLoadStatus(status, `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => {
         const now = Date.now();
-        chrome.storage.local.set({ lastPLRefreshTime: now });
+        browser.storage.local.set({ lastPLRefreshTime: now });
         status.textContent = formatLastRefreshed(now);
       });
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
@@ -1036,7 +1041,7 @@
     } catch (e) {
       setFinalLoadStatus(status, 'ProjectionLab: ' + (e.message || String(e)), () => {
         const now = Date.now();
-        chrome.storage.local.set({ lastPLRefreshTime: now });
+        browser.storage.local.set({ lastPLRefreshTime: now });
         status.textContent = formatLastRefreshed(now);
       });
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
@@ -1057,11 +1062,11 @@
         out.textContent = 'No tab found for app.monarch.com. Open Monarch in a tab and try again.';
         return;
       }
-      await chrome.scripting.executeScript({
+      await browser.scripting.executeScript({
         target: { tabId: monarchTab.id },
         files: ['content-scripts/monarch.js'],
       });
-      const res = await chrome.tabs.sendMessage(monarchTab.id, { type: 'DIAGNOSE_STORAGE' });
+      const res = await browser.tabs.sendMessage(monarchTab.id, { type: 'DIAGNOSE_STORAGE' });
       if (!res || !res.report) {
         out.textContent = 'No report returned.';
         return;
@@ -1093,7 +1098,7 @@
     out.textContent = 'Checking ProjectionLab tab…';
     try {
       const { tab: plTab } = await findAnyPLTabOrOpen();
-      const results = await chrome.scripting.executeScript({
+      const results = await browser.scripting.executeScript({
         target: { tabId: plTab.id },
         world: 'MAIN',
         func: () => {
@@ -1144,13 +1149,13 @@
     wrap.style.display = 'block';
     out.textContent = 'Fetching export schema…';
     try {
-      const key = plApiKey && plApiKey.trim() ? plApiKey : (await chrome.storage.sync.get(['plApiKey'])).plApiKey;
+      const key = plApiKey && plApiKey.trim() ? plApiKey : (await browser.storage.sync.get(['plApiKey'])).plApiKey;
       if (!key) {
         out.textContent = 'Save your ProjectionLab API key first (Step 1).';
         return;
       }
       const { tab: plTab } = await findAnyPLTabOrOpen();
-      const results = await chrome.scripting.executeScript({
+      const results = await browser.scripting.executeScript({
         target: { tabId: plTab.id },
         world: 'MAIN',
         func: async (apiKey) => {

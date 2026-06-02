@@ -47,15 +47,15 @@ function buildMonarchHeaders(csrftoken) {
 }
 
 async function getMonarchCSRFToken() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GET_MONARCH_CSRF_TOKEN", url: MONARCH_ORIGIN }, (response) => {
-      if (!response || !response.success) {
-        resolve(null);
-        return;
-      }
-      resolve(response.token);
-    });
-  });
+  // webextension-polyfill is promise-based (no Chrome-style callback). Await
+  // the response instead of passing a callback so this works on both browsers.
+  try {
+    const response = await browser.runtime.sendMessage({ type: "GET_MONARCH_CSRF_TOKEN", url: MONARCH_ORIGIN });
+    if (!response || !response.success) return null;
+    return response.token;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function graphqlRequestWithAuth(query, variables = {}) {
@@ -170,7 +170,7 @@ function diagnoseStorage() {
   return report;
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handle = async () => {
     if (message.type === 'DIAGNOSE_STORAGE') {
       return { success: true, report: diagnoseStorage() };

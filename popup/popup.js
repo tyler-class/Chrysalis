@@ -6,9 +6,16 @@
  * Plus: syncing, after sync.
  */
 
+// Bundled into this entrypoint by esbuild. Both run as IIFEs that publish their
+// helpers onto window/globalThis (ChrysalisMappingStorage, ChrysalisAnnouncements),
+// which the code below reads. (Replaces the separate <script> tags the HTML used
+// to load before the build step existed.)
+import '../shared/mapping-storage.js';
+import '../shared/announcements.js';
+
 (function () {
   const logo = document.getElementById('popup-logo');
-  if (logo) logo.src = chrome.runtime.getURL('icons/Chrysalis-Logo.svg');
+  if (logo) logo.src = browser.runtime.getURL('icons/Chrysalis-Logo.svg');
 
   // Release/announcement banner — renders into a fixed slot above the status bar
   // so it survives the per-state content re-renders below. No-op when there's no
@@ -100,7 +107,7 @@
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
       </div>
     `;
-    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+    contentEl.querySelector('#open-setup-cta').onclick = () => browser.tabs.create({ url: browser.runtime.getURL('setup/setup.html') });
   }
 
   function renderMappingStorageError(error) {
@@ -113,7 +120,7 @@
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
       </div>
     `;
-    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+    contentEl.querySelector('#open-setup-cta').onclick = () => browser.tabs.create({ url: browser.runtime.getURL('setup/setup.html') });
   }
 
   function renderNotOnMonarch(plCount, monarchTotal) {
@@ -255,7 +262,7 @@
       </div>`
       : '';
 
-    const historyPageUrl = chrome.runtime.getURL('sync-history/sync-history.html');
+    const historyPageUrl = browser.runtime.getURL('sync-history/sync-history.html');
     const historyRows = (syncHistory || [])
       .slice(-15)
       .reverse()
@@ -319,7 +326,7 @@
     const dismissRating = document.getElementById('dismiss-webstore-rating-prompt');
     if (dismissRating) {
       dismissRating.onclick = async () => {
-        await chrome.storage.local.set({ webstoreRatingPromptDismissed: true });
+        await browser.storage.local.set({ webstoreRatingPromptDismissed: true });
         renderResults(
           results,
           lastSyncTime,
@@ -378,16 +385,16 @@
     if (!currentTabId) return;
     renderSyncing();
     try {
-      const res = await chrome.runtime.sendMessage({ type: 'RUN_SYNC', tabId: currentTabId });
+      const res = await browser.runtime.sendMessage({ type: 'RUN_SYNC', tabId: currentTabId });
       const [local, syncPref] = await Promise.all([
-        chrome.storage.local.get([
+        browser.storage.local.get([
           'lastSyncTime',
           'lastSyncResults',
           'lastSyncDebug',
           'syncHistory',
           'webstoreRatingPromptDismissed',
         ]),
-        chrome.storage.sync.get(['showDebugOnPopup']),
+        browser.storage.sync.get(['showDebugOnPopup']),
       ]);
       if (res.results && res.results.length) {
         renderResults(
@@ -423,9 +430,9 @@
   }
 
   async function init() {
-    document.getElementById('open-setup').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+    document.getElementById('open-setup').onclick = () => browser.tabs.create({ url: browser.runtime.getURL('setup/setup.html') });
 
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const tabUrl = tab?.url || '';
     const onMonarch = tabUrl.startsWith(MONARCH_ORIGIN);
     currentTabId = tab?.id ?? null;
@@ -435,8 +442,8 @@
     let rawMappings;
     try {
       [sync, local, rawMappings] = await Promise.all([
-        chrome.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
-        chrome.storage.local.get([
+        browser.storage.sync.get(['plApiKey', 'showDebugOnPopup']),
+        browser.storage.local.get([
           'lastSyncTime',
           'lastSyncResults',
           'lastSyncDebug',

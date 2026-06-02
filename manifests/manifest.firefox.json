@@ -1,0 +1,11 @@
+{
+  "background": {
+    "scripts": ["background/service-worker.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "PLACEHOLDER-REPLACE-ME@chrysalis.example",
+      "strict_min_version": "128.0"
+    }
+  }
+}
