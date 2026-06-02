@@ -39,7 +39,10 @@
         '<strong>A total visual refresh.</strong> v1.1.0 is a top-to-bottom redesign ' +
         "of Chrysalis's interface, plus a new logo. There are no changes to core " +
         'functionality — but the tool should be more enjoyable to use and easier to ' +
-        'navigate and understand with the new UI.',
+        'navigate and understand with the new UI.<br><br>' +
+        '<strong>Catching up from v1.0.6:</strong> restored Monarch syncing, a manual ' +
+        '<strong>ProjectionLab Early Access</strong> toggle, and support for Chromium ' +
+        'browsers beyond Chrome (Arc, Brave, Edge, Opera, Vivaldi).',
       linkText: 'Read the release notes ↗',
       linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
       expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
