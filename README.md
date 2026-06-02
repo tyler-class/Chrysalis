@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icons/Chrysalis-Logo.svg" width="96" alt="Chrysalis">
+<img src="icons/icon128.png" width="96" alt="Chrysalis">
 
 <h1>Chrysalis</h1>
 
