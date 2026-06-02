@@ -8,7 +8,7 @@
 
 (function () {
   const logo = document.getElementById('popup-logo');
-  if (logo) logo.src = chrome.runtime.getURL('icons/logo-full.jpg');
+  if (logo) logo.src = chrome.runtime.getURL('icons/Chrysalis-Logo.svg');
 
   // Release/announcement banner — renders into a fixed slot above the status bar
   // so it survives the per-state content re-renders below. No-op when there's no
