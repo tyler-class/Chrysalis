@@ -1,8 +1,24 @@
-<img src="icons/icon128.png" width="72" align="left" style="margin-right: 16px; margin-bottom: 8px;">
+<div align="center">
 
-# Chrysalis
+<img src="icons/Chrysalis-Logo.svg" width="96" alt="Chrysalis">
 
-**Sync Monarch Money balances to ProjectionLab.**
+<h1>Chrysalis</h1>
+
+<strong>Sync Monarch Money balances into ProjectionLab — in one click.</strong>
+
+<p>
+  <img src="https://img.shields.io/badge/Monarch-source-ef6c2b?style=flat-square" alt="Monarch (source)">
+  <img src="https://img.shields.io/badge/%E2%86%92-1b1a14?style=flat-square" alt="to">
+  <img src="https://img.shields.io/badge/ProjectionLab-destination-2f6bff?style=flat-square" alt="ProjectionLab (destination)">
+</p>
+
+<p>
+  <a href="https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood"><img src="https://img.shields.io/badge/Add%20to%20Chrome-1b1a14?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Add to Chrome"></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/always%20free-0f8f63?style=for-the-badge" alt="Always free">
+</p>
+
+</div>
 
 Chrysalis is a Chrome extension that pulls your live account balances from Monarch Money and pushes them into ProjectionLab with one click. No scripts, no terminal, no copy-pasting numbers by hand.
 
