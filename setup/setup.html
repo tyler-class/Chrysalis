@@ -189,6 +189,43 @@
       box-shadow: 0 0 0 rgba(15,143,99,0.0);
       animation: chip-glow 2.4s ease-in-out infinite;
     }
+    .chip-ready { position: relative; }
+    .chip-how-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--good);
+      background: none;
+      border: none;
+      padding: 0 2px;
+      margin-left: 2px;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .chip-how-btn:hover { opacity: 0.75; }
+    .chip-how-pop {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      z-index: 1000;
+      width: 290px;
+      max-width: 86vw;
+      padding: 14px 16px;
+      background: var(--card);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-md);
+      box-shadow: var(--shadow-lg);
+      color: var(--ink-2);
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.5;
+      text-align: left;
+    }
+    .chip-how-pop[hidden] { display: none; }
+    .chip-how-pop strong { color: var(--ink); font-weight: 600; }
+    .chip-how-pop ol { margin: 8px 0 0; padding-left: 18px; }
+    .chip-how-pop li { margin-bottom: 4px; }
     @keyframes chip-glow {
       0% {
         box-shadow: 0 0 0 rgba(15,143,99,0.0);
@@ -861,6 +898,19 @@
     <div class="chips">
       <div class="chip" id="chip-pl"> <span class="dot"></span> <span id="chip-pl-text">ProjectionLab API — not configured</span> </div>
       <div class="chip" id="chip-maps"> <span class="dot"></span> <span id="chip-maps-text">Account Mappings — 0 mapped</span> </div>
+      <div class="chip ok chip-ready" id="chip-ready" style="display:none">
+        <span class="dot"></span>
+        <span>Ready to Sync</span>
+        <button type="button" class="chip-how-btn" id="chip-how-btn" aria-haspopup="dialog" aria-expanded="false">How?</button>
+        <div class="chip-how-pop" id="chip-how-pop" role="dialog" aria-label="How to run a sync" hidden>
+          <strong>To run a sync:</strong>
+          <ol>
+            <li>Open <strong>app.monarch.com</strong> in a browser tab.</li>
+            <li>Click the Chrysalis extension icon.</li>
+            <li>Click <strong>Sync Now</strong>.</li>
+          </ol>
+        </div>
+      </div>
     </div>
 
     <div class="step-card" id="step1">

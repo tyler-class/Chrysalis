@@ -525,6 +525,46 @@
       card.classList.remove('complete');
       num.textContent = stepId === 'step1' ? '1' : stepId === 'step2' ? '2' : '3';
     }
+    updateReadyPill();
+  }
+
+  // Show the "Ready to Sync" pill only once all three step cards are green.
+  // Reading the .complete class keeps this in lockstep with whatever turned
+  // each step green, with no duplicated completion logic.
+  function updateReadyPill() {
+    const pill = document.getElementById('chip-ready');
+    if (!pill) return;
+    const allComplete = ['step1', 'step2', 'step3'].every((id) => {
+      const c = document.getElementById(id);
+      return c && c.classList.contains('complete');
+    });
+    pill.style.display = allComplete ? '' : 'none';
+  }
+
+  function setupReadyPillHelp() {
+    const btn = document.getElementById('chip-how-btn');
+    const pop = document.getElementById('chip-how-pop');
+    if (!btn || !pop) return;
+    function close() {
+      pop.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    btn.addEventListener('click', () => {
+      if (!pop.hidden) { close(); return; }
+      pop.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('keydown', onKey);
+      setTimeout(() => {
+        document.addEventListener('click', function onDoc(ev) {
+          if (!pop.contains(ev.target) && ev.target !== btn) {
+            close();
+            document.removeEventListener('click', onDoc);
+          }
+        });
+      }, 0);
+    });
   }
 
   function getStep2IconUrl(name) {
@@ -2004,6 +2044,7 @@
   }
 
   setupStepToggles();
+  setupReadyPillHelp();
   setupAdvancedSection();
   setHeaderLogoUrl();
   setStep2ButtonIconUrls();
