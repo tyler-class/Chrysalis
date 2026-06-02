@@ -120,27 +120,27 @@
         position: relative;
         margin-bottom: 14px;
         padding: 12px 38px 12px 14px;
-        border: 1px solid var(--border, #e5e7eb);
-        border-radius: 12px;
-        background: var(--gradient-subtle, linear-gradient(135deg, rgba(253,107,47,0.08) 0%, rgba(37,99,235,0.08) 100%));
+        border: 1px solid var(--line, #e6e2d8);
+        border-radius: 14px;
+        background: var(--gradient-subtle, #eceae3);
         font-size: 12px;
         line-height: 1.5;
-        color: var(--text, #111827);
+        color: var(--ink, #16150f);
       }
       .chrysalis-announcement-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-      .chrysalis-announcement-body { color: var(--text, #111827); }
+      .chrysalis-announcement-body { color: var(--ink, #16150f); }
       .chrysalis-announcement-link {
         display: inline-block; margin-top: 8px;
-        font-weight: 600; color: var(--accent, #2563eb); text-decoration: none;
+        font-weight: 700; color: var(--ink, #16150f); text-decoration: underline;
       }
       .chrysalis-announcement-link:hover { text-decoration: underline; }
       .chrysalis-announcement-dismiss {
         position: absolute; top: 8px; right: 8px;
         background: none; border: none; cursor: pointer;
-        font-size: 18px; line-height: 1; color: var(--muted, #6b7280);
+        font-size: 18px; line-height: 1; color: var(--ink-2, #56524a);
         padding: 2px 7px; border-radius: 6px; font-family: inherit;
       }
-      .chrysalis-announcement-dismiss:hover { color: var(--text, #111827); background: rgba(0,0,0,0.05); }
+      .chrysalis-announcement-dismiss:hover { color: var(--ink, #16150f); background: rgba(0,0,0,0.05); }
     `;
     document.head.appendChild(style);
     stylesInjected = true;
