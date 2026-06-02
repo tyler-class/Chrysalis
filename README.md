@@ -231,8 +231,6 @@ The result list stays visible until you run the next sync, so you can close and 
 
 <kbd><img src="screenshots/popup-just-synced.png" width="400"></kbd>
 
-<kbd><img src="screenshots/popup-ready-to-sync-subsequent.png" width="400"></kbd>
-
 ### Sync history
 
 Click **View History** on the setup page, or the same link in the extension popup when you are on a Monarch tab. The Sync History keeps a log of recent syncs with timestamps and outcomes including the Monarch accounts synced to which ProjectionLab target accounts, the amount that was synced (positive or negative), and a status of that account's sync job. Useful for confirming a sync ran correctly or diagnosing a pattern of failures. The most recent Sync History shows up under a collapsed gray section on the popup after you have run at least 1 sync.
