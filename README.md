@@ -263,10 +263,6 @@ To help ensure people don't accidentally take an unreversible action on their Ch
 
 This checkbox will inject more detailed, technical debug details in 2 places: (1) on the extension popup after a sync job has run, and (2) at the bottom of any sync record under Sync History. If something is wonky, this is a good place to start.
 
-<kbd><img src="screenshots/popup-with-debug.png" width="400"></kbd>
-
-<kbd><img src="screenshots/sync-history-run-with-debug.png" width="400"></kbd>
-
 ### Run sync automatically
 
 If you want to, you can enable a time-based sync job daily, weekly, monthly, or quarterly, and you can choose the day or week or day of month and time of day for it to run. **Note:** The scheduled job will only work if the base conditions are met for processing, being that you must have Google Chrome open, your computer awake, and a Monarch tab must be open in your browser in an active session.
