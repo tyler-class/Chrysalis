@@ -85,32 +85,55 @@
       margin-bottom: 8px;
     }
     .logo {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
+      width: 52px;
+      height: 52px;
+      border-radius: 15px;
       flex-shrink: 0;
       object-fit: contain;
       display: block;
+      box-shadow: var(--shadow-sm);
     }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--text); }
+    .header h1 {
+      margin: 0;
+      font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+    .header h1 .wordmark { font-weight: 600; }
+    .header h1 .title-sub { color: var(--ink-3); font-weight: 500; }
     .header-links {
       margin-left: auto;
       display: flex;
       align-items: center;
       gap: 14px;
     }
-    .setup-page-link { font-size: 14px; color: var(--accent); text-decoration: none; }
-    .setup-page-link:hover { text-decoration: underline; }
+    .setup-page-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink-2);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 999px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .setup-page-link svg { width: 15px; height: 15px; display: block; }
+    .setup-page-link:hover { background: var(--canvas-2); color: var(--ink); text-decoration: none; }
     .help-icon-link {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--muted);
+      border: 1px solid var(--line-strong);
+      background: var(--card);
+      color: var(--ink-2);
       font-size: 13px;
       font-weight: 700;
       line-height: 1;
@@ -120,12 +143,12 @@
       flex-shrink: 0;
     }
     .help-icon-link:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: var(--bg);
-      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
+      border-color: var(--line-strong);
+      color: var(--ink);
+      background: var(--canvas-2);
+      box-shadow: var(--shadow-sm);
     }
-    .header-desc { color: var(--muted); margin: 0 0 24px 58px; font-size: 14px; }
+    .header-desc { color: var(--ink-2); margin: 0 0 24px 66px; font-size: 14.5px; }
     .chips {
       display: flex;
       gap: 12px;
@@ -136,48 +159,60 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
+      padding: 9px 16px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      box-shadow: var(--shadow-sm);
       font-size: 13px;
       font-weight: 500;
+      color: var(--ink-2);
+      font-variant-numeric: tabular-nums;
     }
-    .chip.ok { border-color: var(--green); background: var(--bg); color: var(--green); }
+    .chip.ok { border-color: var(--good-line); background: var(--good-bg); color: var(--good); }
+    /* TODO(ui): the mapping-count chip text ("N Monarch → M ProjectionLab")
+       is assembled as one string in setup.js (updateChips). To render the two
+       figures as a Spline Mono stat with a highlighted background + green arrow
+       (per the brief), setup.js would need to wrap the numbers in their own
+       spans. Not doing that here — that's a logic/markup change in JS. The chip
+       uses tabular-nums so the numerals stay aligned in the meantime. */
     .chip .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--muted);
+      background: var(--ink-3);
+      flex-shrink: 0;
     }
     .chip.ok .dot {
-      background: var(--green);
-      box-shadow: 0 0 0 rgba(16,185,129,0.0);
+      background: var(--good);
+      box-shadow: 0 0 0 rgba(15,143,99,0.0);
       animation: chip-glow 2.4s ease-in-out infinite;
     }
     @keyframes chip-glow {
       0% {
-        box-shadow: 0 0 0 rgba(16,185,129,0.0);
+        box-shadow: 0 0 0 rgba(15,143,99,0.0);
         transform: scale(1);
       }
       50% {
-        box-shadow: 0 0 10px rgba(16,185,129,0.55);
+        box-shadow: 0 0 10px rgba(15,143,99,0.55);
         transform: scale(1.05);
       }
       100% {
-        box-shadow: 0 0 0 rgba(16,185,129,0.0);
+        box-shadow: 0 0 0 rgba(15,143,99,0.0);
         transform: scale(1);
       }
     }
     .step-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
+      background: var(--card);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-lg);
       padding: 24px 28px;
       margin-bottom: 18px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      box-shadow: var(--shadow-md);
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
-    .step-card.complete { border-color: var(--green); background: var(--bg); }
+    .step-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .step-card.complete { border-color: var(--good-line); background: var(--card); }
     .step-head {
       display: flex;
       align-items: center;
@@ -193,7 +228,7 @@
       width: 20px;
       height: 20px;
       flex-shrink: 0;
-      color: var(--muted);
+      color: var(--ink-3);
       transition: transform 0.2s ease;
     }
     .step-chevron svg {
@@ -211,19 +246,22 @@
       padding-top: 0;
     }
     .step-num {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      background: var(--surface);
-      color: var(--muted);
+      width: 30px;
+      height: 30px;
+      border-radius: var(--r-sm);
+      background: var(--canvas-2);
+      color: var(--ink-2);
       display: flex;
       align-items: center;
       justify-content: center;
+      font-family: 'Spline Sans Mono', ui-monospace, monospace;
       font-weight: 600;
       font-size: 14px;
+      flex-shrink: 0;
+      transition: background 0.2s ease, color 0.2s ease;
     }
-    .step-card.complete .step-num { background: var(--green); color: #fff; }
-    .step-title { font-weight: 600; font-size: 17px; color: var(--text); }
+    .step-card.complete .step-num { background: var(--good); color: #fff; }
+    .step-title { font-weight: 600; font-size: 17px; color: var(--ink); }
     label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
     input[type="password"],
     input[type="text"],
@@ -233,88 +271,129 @@
       padding: 12px 14px;
       font-family: inherit;
       font-size: 14px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-sm);
+      color: var(--ink);
       margin-bottom: 10px;
     }
     input:focus, select:focus {
       outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(27,26,20,0.14);
     }
-    .hint { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+    .hint { font-size: 13px; color: var(--ink-2); margin-bottom: 14px; line-height: 1.5; }
     .btn {
       font-family: inherit;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       padding: 12px 20px;
-      border-radius: 10px;
+      border-radius: var(--r-sm);
       border: none;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      transition: opacity 0.15s, box-shadow 0.15s;
+      gap: 9px;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.05s, opacity 0.15s;
     }
+    .btn:active:not(:disabled) { transform: translateY(1px); }
     .btn-primary {
-      background: var(--gradient);
+      background: var(--primary);
       color: #fff;
-      box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+      box-shadow: var(--shadow-md);
     }
-    .btn-primary:hover:not(:disabled) { opacity: 0.95; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; background: var(--border); color: var(--muted); }
-    .btn-monarch { background: var(--monarch) !important; box-shadow: 0 2px 8px rgba(253,107,47,0.35); }
-    .btn-monarch:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(253,107,47,0.45); }
-    .btn-pl { background: var(--monarch-blue) !important; box-shadow: 0 2px 8px rgba(37,99,235,0.35); }
-    .btn-pl:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(37,99,235,0.45); }
-    .btn-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-lg); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; background: var(--line-strong); color: var(--ink-3); }
+    /* Load from Monarch — amber data-source identity */
+    .btn-monarch {
+      background: var(--monarch-bg) !important;
+      color: var(--monarch-ink) !important;
+      border: 1px solid var(--monarch);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-monarch:hover:not(:disabled) { box-shadow: var(--shadow-md); }
+    /* Load from ProjectionLab — blue data-source identity */
+    .btn-pl {
+      background: var(--projlab-bg) !important;
+      color: var(--projlab-ink) !important;
+      border: 1px solid var(--projlab);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-pl:hover:not(:disabled) { box-shadow: var(--shadow-md); }
+    /* White rounded chip behind the full-colour brand logo, so it reads
+       cleanly on the tinted button. (Styled on the <img> itself because
+       setup.js rebuilds the button innerHTML and would drop a wrapper.) */
+    .btn-icon {
+      width: 22px;
+      height: 22px;
+      padding: 3px;
+      background: #fff;
+      border-radius: 6px;
+      object-fit: contain;
+      flex-shrink: 0;
+      box-shadow: 0 1px 2px rgba(28,25,15,.10);
+    }
     .btn-secondary {
-      background: var(--bg);
-      color: var(--accent);
-      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--ink-2);
+      border: 1px solid var(--line-strong);
     }
-    .btn-secondary:hover { background: var(--surface); border-color: var(--accent); }
+    .btn-secondary:hover { background: var(--canvas-2); border-color: var(--line-strong); color: var(--ink); }
     .spinner {
       width: 18px;
       height: 18px;
-      border: 2px solid rgba(255,255,255,0.35);
-      border-top-color: #fff;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      opacity: 0.7;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .load-status { transition: opacity 1s ease; }
     .load-status.load-status-fade-out { opacity: 0; }
-    .map-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    .map-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--card);
+    }
     .map-table th {
       text-align: left;
-      padding: 12px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-3);
+      border-bottom: 1px solid var(--line);
+      background: var(--canvas-2);
     }
+    .map-table th:first-child { border-top-left-radius: var(--r-md); }
+    .map-table th:last-child { border-top-right-radius: var(--r-md); }
     /* Emphasize the two main column headers */
     .map-table th:first-child,
     .map-table th.col-pl {
-      font-size: 14.4px; /* ~20% larger than base 12px */
+      font-size: 12px; /* slightly larger than the 11px base */
     }
     .map-table th.col-remove { width: 44px; text-align: center; }
     .map-table th.col-pl { min-width: 300px; padding-left: 28px; }
-    .map-table td { padding: 12px 10px; vertical-align: top; border-bottom: 1px solid var(--border); }
+    .map-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    .map-table tr:last-child td { border-bottom: none; }
     .map-table td.col-remove { text-align: center; }
     .map-table td.col-saved { text-align: center; vertical-align: middle; }
-    .row-saved-check { color: var(--green); font-weight: 600; font-size: 14px; }
+    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; }
     .map-cell { min-width: 200px; }
     .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
     .map-cell-pl .add-dropdown-search { min-width: 0; }
     .map-arrow {
-      font-size: 14px;
-      color: var(--muted);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--monarch);
       padding: 0 10px;
       white-space: nowrap;
     }
@@ -338,21 +417,22 @@
     .monarch-normal-layout.hidden { display: none; }
     .re-lane { margin-bottom: 14px; }
     .re-lane:last-child { margin-bottom: 0; }
-    .re-lane-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+    .re-lane-label { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+    /* Monarch source accounts — amber data-source identity */
     .chip-tag {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 6px 10px;
-      background: rgba(37,99,235,0.1);
+      background: var(--monarch-bg);
       border-radius: 8px;
       font-size: 12px;
-      font-weight: 500;
-      color: var(--text);
-      border: 1px solid rgba(37,99,235,0.25);
+      font-weight: 600;
+      color: var(--monarch-ink);
+      border: 1px solid var(--monarch);
     }
-    .chip-tag .remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
-    .chip-tag .remove:hover { color: var(--red); }
+    .chip-tag .remove { background: none; border: none; color: var(--monarch-ink); opacity: 0.7; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
+    .chip-tag .remove:hover { color: var(--red); opacity: 1; }
     .add-dropdown {
       font-family: inherit;
       font-size: 12px;
@@ -364,7 +444,7 @@
       color: var(--muted);
       cursor: pointer;
     }
-    .add-dropdown:hover { border-color: var(--accent); color: var(--accent); }
+    .add-dropdown:hover { border-color: var(--primary); color: var(--ink); }
     .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; }
     .add-dropdown-search {
       font-family: inherit;
@@ -381,11 +461,35 @@
       color: var(--text);
     }
     .add-dropdown-search.has-clear { padding-right: 28px; }
-    .add-dropdown-search::placeholder { color: var(--muted); }
+    .add-dropdown-search::placeholder { color: var(--ink-3); }
     .add-dropdown-search:focus {
       outline: none;
-      border-color: var(--monarch-blue);
-      box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(27,26,20,0.12);
+    }
+    /* ProjectionLab destination control — blue data-source identity */
+    .map-cell-pl .add-dropdown-search,
+    select.map-select {
+      background-color: var(--projlab-bg);
+      border: 1px solid var(--projlab);
+      border-style: solid;
+      color: var(--projlab-ink);
+      font-weight: 600;
+    }
+    .map-cell-pl .add-dropdown-search::placeholder { color: var(--projlab-ink); opacity: 0.65; }
+    .map-cell-pl .add-dropdown-search:focus,
+    select.map-select:focus {
+      border-color: var(--projlab);
+      box-shadow: 0 0 0 3px rgba(47,107,255,0.18);
+    }
+    /* Custom chevron for the native select variant (no clear button to collide with) */
+    select.map-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%231f4fcc' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+      -webkit-appearance: none;
+      appearance: none;
     }
     .pl-search-wrap { position: relative; display: inline-block; width: 100%; min-width: 0; }
     .pl-search-clear {
@@ -417,10 +521,10 @@
       max-height: 240px;
       overflow-y: auto;
       overflow-x: visible;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      background: var(--card);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-sm);
+      box-shadow: var(--shadow-lg);
       z-index: 1000;
     }
     .monarch-add-panel-header {
@@ -468,15 +572,17 @@
     .add-row-btn {
       font-family: inherit;
       font-size: 13px;
-      font-weight: 500;
-      padding: 12px 18px;
+      font-weight: 600;
+      width: 100%;
+      padding: 13px 18px;
       background: transparent;
-      border: 1px dashed var(--border);
-      border-radius: 10px;
-      color: var(--muted);
+      border: 1.5px dashed var(--line-strong);
+      border-radius: var(--r-sm);
+      color: var(--ink-2);
       cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .add-row-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+    .add-row-btn:hover { border-color: var(--primary); color: var(--ink); background: var(--canvas-2); }
     .action-bar {
       display: flex;
       align-items: center;
@@ -503,20 +609,25 @@
     code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--surface); padding: 2px 6px; border-radius: 6px; }
 
     .advanced-card {
-      --advanced-border: #9ca3af;
+      --advanced-border: var(--line-strong);
       border-color: var(--advanced-border);
       margin-top: 18px;
     }
-    .advanced-card.advanced-locked { background: #e5e7eb; }
-    .advanced-card:not(.advanced-locked) { background: var(--bg); }
-    .advanced-head .step-chevron { margin-left: auto; color: var(--muted); }
+    .advanced-card.advanced-locked { background: var(--canvas-2); }
+    .advanced-card:not(.advanced-locked) { background: var(--card); }
+    /* Bolt badge for the Advanced step number slot */
+    .advanced-card .step-num {
+      background: #fff3df;
+      font-size: 15px;
+    }
+    .advanced-head .step-chevron { margin-left: auto; color: var(--ink-3); }
     .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
     .advanced-section-label {
       font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      color: var(--muted);
+      color: var(--ink-3);
       margin: 20px 0 8px 0;
     }
     .advanced-section-label:first-of-type { margin-top: 0; }
@@ -531,16 +642,16 @@
     .advanced-edit-btn {
       padding: 6px 12px;
       font-size: 12px;
-      font-weight: 500;
-      background: var(--surface);
-      border: 1px solid var(--monarch-blue);
+      font-weight: 600;
+      background: var(--card);
+      border: 1px solid var(--line-strong);
       border-radius: 8px;
-      color: var(--monarch-blue);
+      color: var(--ink-2);
       cursor: pointer;
     }
-    .advanced-edit-btn:hover { background: rgba(37,99,235,0.08); border-color: var(--monarch-blue); }
-    .advanced-card.advanced-locked .advanced-edit-btn { color: var(--red); }
-    .advanced-card:not(.advanced-locked) .advanced-edit-btn { color: var(--monarch-blue); }
+    .advanced-edit-btn:hover { background: var(--canvas-2); border-color: var(--line-strong); }
+    .advanced-card.advanced-locked .advanced-edit-btn { color: var(--red); border-color: var(--red); }
+    .advanced-card:not(.advanced-locked) .advanced-edit-btn { color: var(--ink); }
     .advanced-body {
       overflow: hidden;
       padding-top: 16px;
@@ -572,9 +683,9 @@
     .advanced-body input:disabled,
     .advanced-body select:disabled,
     .advanced-body textarea:disabled {
-      background: #f3f4f6;
-      color: var(--muted);
-      border-color: #d1d5db;
+      background: var(--canvas-2);
+      color: var(--ink-3);
+      border-color: var(--line-strong);
       cursor: not-allowed;
     }
     .advanced-title { flex: 0 0 auto; }
@@ -630,11 +741,11 @@
     .advanced-status { margin-left: 10px; font-size: 13px; color: var(--muted); }
     .advanced-body .btn { font-size: 13px; }
     .advanced-body .btn-secondary {
-      background: var(--surface);
-      border-color: var(--border);
-      color: var(--accent);
+      background: var(--card);
+      border-color: var(--line-strong);
+      color: var(--ink-2);
     }
-    .advanced-body .btn-secondary:hover { background: var(--bg); border-color: var(--accent); }
+    .advanced-body .btn-secondary:hover { background: var(--canvas-2); border-color: var(--line-strong); color: var(--ink); }
     .btn-danger {
       background: var(--bg);
       color: var(--red);
@@ -658,19 +769,65 @@
     }
     .switch input:checked + .switch-slider { background: var(--accent); }
     .switch input:checked + .switch-slider::before { transform: translateX(18px); }
-    .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px rgba(37,99,235,0.3); }
+    .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px rgba(47,107,255,0.3); }
     .switch-text { font-size: 12px; color: var(--muted); }
     .btn-danger:hover:not(:disabled) { background: #fef2f2; }
     .btn-arrow { margin-left: 4px; opacity: 0.85; font-size: 0.95em; }
+
+    /* --- Interaction polish (presentation only) --- */
+    /* Subtle staggered rise as the cards settle on mount. fill-mode: backwards
+       keeps the start state during the delay, then hands back to the base
+       style so the hover lift transform still works afterward. */
+    @keyframes card-rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .step-card { animation: card-rise 0.5s cubic-bezier(.3,.7,.2,1) backwards; }
+    #step1 { animation-delay: 0.04s; }
+    #step2 { animation-delay: 0.10s; }
+    #step3 { animation-delay: 0.16s; }
+    #advanced-card { animation-delay: 0.22s; }
+
+    /* Keyboard focus ring for the accordion headers and buttons. */
+    .step-head:focus-visible,
+    .btn:focus-visible,
+    .add-row-btn:focus-visible,
+    .setup-page-link:focus-visible,
+    .help-icon-link:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(27,26,20,0.16);
+      border-radius: var(--r-sm);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .step-card,
+      .step-card:hover,
+      .chip.ok .dot {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+      .step-chevron,
+      .btn,
+      .btn:active:not(:disabled),
+      .setup-page-link,
+      .help-icon-link,
+      .add-row-btn,
+      .switch-slider,
+      .switch-slider::before,
+      .step-num {
+        transition: none !important;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <img src="" alt="Chrysalis" class="logo" id="header-logo" />
-      <h1>Chrysalis · Setup</h1>
+      <h1><span class="wordmark">Chrysalis</span><span class="title-sub"> · Setup</span></h1>
       <div class="header-links">
-        <a href="" id="setup-sync-history-link" target="_blank" rel="noopener noreferrer" class="setup-page-link">View History</a>
+        <a href="" id="setup-sync-history-link" target="_blank" rel="noopener noreferrer" class="setup-page-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>View History</a>
         <a
           href="https://github.com/tyler-class/Chrysalis#readme"
           class="help-icon-link"
