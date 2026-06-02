@@ -670,19 +670,18 @@
     .advanced-card:not(.advanced-locked) { background: var(--card); }
     /* Bolt badge for the Advanced step number slot */
     .advanced-card .step-num {
-      background: #fbe3bf;
-      color: var(--monarch-ink);
+      background: var(--canvas-2);
+      color: var(--ink-2);
     }
     .advanced-card .step-num svg { display: block; }
     .advanced-head .step-chevron { margin-left: auto; color: var(--ink-3); }
     .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
     .advanced-section-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--ink-3);
-      margin: 20px 0 8px 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--ink);
+      margin: 26px 0 12px 0;
     }
     .advanced-section-label:first-of-type { margin-top: 0; }
     .advanced-unlock-block { margin-bottom: 16px; display: flex; align-items: center; gap: 13px; }
@@ -746,7 +745,11 @@
     .advanced-hint, .advanced-note { font-size: 12px; color: var(--muted); margin: 0 0 8px 0; line-height: 1.5; }
     .advanced-label { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 6px 0; display: block; }
     .advanced-label input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
-    .advanced-block { margin-bottom: 20px; }
+    .advanced-block { margin-bottom: 20px; padding-left: 16px; }
+    /* keep the unlock preamble (above the first heading) flush */
+    .advanced-unlock-block { padding-left: 0; }
+    /* indent the standalone intro text under a heading to match its blocks */
+    .advanced-body > .advanced-hint { padding-left: 16px; }
     .advanced-mapping-actions { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; }
     .advanced-actions-stack { display: flex; flex-direction: column; gap: 2px; }
     .advanced-actions-stack .btn-danger { width: 200px; min-width: 200px; box-sizing: border-box; }
