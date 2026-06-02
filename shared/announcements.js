@@ -33,34 +33,16 @@
   // ─── Edit this list to publish announcements ──────────────────────────────
   const ANNOUNCEMENTS = [
     {
-      id: 'v1.0.6',
-      title: 'New release — v1.0.6',
+      id: 'v1.1.0',
+      title: 'New release — v1.1.0',
       body:
-        '<strong>Now works beyond Chrome.</strong> The popup’s Setup button did ' +
-        'nothing on Chromium browsers other than Google Chrome (e.g. Dia, Arc, ' +
-        'Brave, Edge, Opera, Vivaldi); it now opens correctly on all of them, as ' +
-        'well as Chrome itself.<br><br>' +
-        'Still included from v1.0.5: the Monarch “Failed to fetch” fix and the new ' +
-        '<strong>ProjectionLab Early Access</strong> toggle, plus reliability fixes. ' +
-        'If your ProjectionLab account is on Early Access, open ' +
-        '<strong>Setup → ProjectionLab Settings</strong> and turn on ' +
-        '“Opt in to ProjectionLab Early Access” — it’s a manual step.',
-      linkText: 'Read the full release notes ↗',
+        '<strong>A total visual refresh.</strong> v1.1.0 is a top-to-bottom redesign ' +
+        "of Chrysalis's interface, plus a new logo. There are no changes to core " +
+        'functionality — but the tool should be more enjoyable to use and easier to ' +
+        'navigate and understand with the new UI.',
+      linkText: 'Read the release notes ↗',
       linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
-      expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
-    },
-    {
-      id: 'v1.0.5',
-      title: 'New release — v1.0.5',
-      body:
-        'This update fixes the Monarch “Failed to fetch” outage and adds a new ' +
-        '<strong>ProjectionLab Early Access</strong> toggle, plus reliability fixes. ' +
-        'If your ProjectionLab account is on Early Access, open ' +
-        '<strong>Setup → ProjectionLab Settings</strong> and turn on ' +
-        '“Opt in to ProjectionLab Early Access” — it’s a manual step.',
-      linkText: 'Read the full release notes ↗',
-      linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
-      expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
+      expires: '2026-09-01', // disappears on 2026-09-01 (shows through 2026-08-31)
     },
   ];
   // ──────────────────────────────────────────────────────────────────────────

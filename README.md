@@ -24,34 +24,12 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ## 📣 Release Announcement — v1.1.0 (2026-06-02)
 
-**A complete visual refresh.** v1.1.0 is a top-to-bottom redesign of the Chrysalis
-interface — the setup page, the popup, and the sync history — plus a brand-new logo
-and toolbar icon. **None of the core functionality changed:** syncing, account
-mapping, authentication, and every setting behave exactly as before. This release is
-purely about making Chrysalis look and feel more modern, polished, and easy to use.
-
-### What's new
-
-- **Redesigned UI across the board.** A new design system — a warm, calm canvas with
-  lifted white cards and a clear type hierarchy — replaces the old flat look. The
-  setup page, popup, and sync history now share one cohesive style.
-- **Color that means something.** Amber always signals **Monarch** (the source), blue
-  always signals **ProjectionLab** (the destination), and green means
-  **done / configured** — so the data flow reads left-to-right at a glance.
-- **New logo & icon.** A fresh Chrysalis mark, with a rounded, drop-shadowed toolbar
-  icon that sits cleanly in your browser bar.
-- **Clearer setup.** Status pills show your configuration at a glance, completed steps
-  flip to a green check, the mapping table stays hidden until you're ready for it, and
-  a new **Ready to Sync** indicator (with a quick **How?** guide) appears once
-  everything is set.
-- **Friendlier popup.** Sync results, the most-recent-sync card, and announcements all
-  got a cleaner, more readable treatment.
-
-Everything you already set up — your API key, mappings, and history — carries over
-untouched.
+This version is a total visual refresh — a top-to-bottom redesign of Chrysalis's
+interface and a new logo. There are **no changes to core functionality**, but the tool
+should be more enjoyable to use and easier to navigate and understand with the new UI.
 
 <details>
-<summary><strong>Previous release — v1.0.6</strong></summary>
+<summary><strong>Recent release — v1.0.6</strong></summary>
 
 <br>
 
