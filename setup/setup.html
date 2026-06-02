@@ -22,8 +22,8 @@
       --ink-3: #8a857a;
 
       /* primary action = ink, NOT a gradient */
-      --primary: #1b1a14;
-      --primary-hover: #34312a;
+      --primary: #2d2b25;
+      --primary-hover: #3a382f;
 
       /* semantic state */
       --good: #0f8f63;
@@ -37,6 +37,11 @@
       --projlab: #2f6bff;
       --projlab-bg: #e8efff;
       --projlab-ink: #1f4fcc;
+      /* softer mapping-pill variants: bg faded closer to white, darker text */
+      --monarch-pill-bg: #fdf4ef;
+      --monarch-pill-ink: #8f3c12;
+      --projlab-pill-bg: #f2f5ff;
+      --projlab-pill-ink: #163a8f;
 
       /* shadows */
       --shadow-sm: 0 1px 2px rgba(28,25,15,.05), 0 1px 1px rgba(28,25,15,.04);
@@ -468,14 +473,14 @@
       align-items: center;
       gap: 6px;
       padding: 6px 10px;
-      background: var(--monarch-bg);
+      background: var(--monarch-pill-bg);
       border-radius: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: var(--monarch-ink);
+      color: var(--monarch-pill-ink);
       border: 1px solid var(--monarch);
     }
-    .chip-tag .remove { background: none; border: none; color: var(--monarch-ink); opacity: 0.7; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
+    .chip-tag .remove { background: none; border: none; color: var(--monarch-pill-ink); opacity: 0.7; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
     .chip-tag .remove:hover { color: var(--red); opacity: 1; }
     .add-dropdown {
       font-family: inherit;
@@ -514,13 +519,13 @@
     /* ProjectionLab destination control — blue data-source identity */
     .map-cell-pl .add-dropdown-search,
     select.map-select {
-      background-color: var(--projlab-bg);
+      background-color: var(--projlab-pill-bg);
       border: 1px solid var(--projlab);
       border-style: solid;
-      color: var(--projlab-ink);
+      color: var(--projlab-pill-ink);
       font-weight: 600;
     }
-    .map-cell-pl .add-dropdown-search::placeholder { color: var(--projlab-ink); opacity: 0.65; }
+    .map-cell-pl .add-dropdown-search::placeholder { color: var(--projlab-pill-ink); opacity: 0.7; }
     .map-cell-pl .add-dropdown-search:focus,
     select.map-select:focus {
       border-color: var(--projlab);
@@ -528,7 +533,7 @@
     }
     /* Custom chevron for the native select variant (no clear button to collide with) */
     select.map-select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%231f4fcc' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23163a8f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 10px center;
       padding-right: 30px;
