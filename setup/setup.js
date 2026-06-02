@@ -166,9 +166,20 @@
       chipPlText.textContent = 'ProjectionLab API — not configured';
     }
 
-    const mappings = accountMappings;
-    const plCount = mappings.length;
-    const monarchTotal = mappings.reduce((sum, m) => {
+    // A row only counts as mapped once it has a ProjectionLab account AND
+    // at least one Monarch account selected in that same row (matching the
+    // step-3 completion logic, including asset-with-loan rows).
+    const completeMappings = accountMappings.filter((m) => {
+      if (!m.plId) return false;
+      if (isAssetWithLoanMapping(m)) {
+        const valueCount = m.monarchAccounts?.length || 0;
+        const loanCount = m.monarchAccountsLoan?.length || 0;
+        return valueCount + loanCount > 0;
+      }
+      return (m.monarchAccounts?.length || 0) > 0;
+    });
+    const plCount = completeMappings.length;
+    const monarchTotal = completeMappings.reduce((sum, m) => {
       const value = m.monarchAccounts?.length || 0;
       const loan = isAssetWithLoanMapping(m) ? (m.monarchAccountsLoan?.length || 0) : 0;
       return sum + value + loan;
@@ -514,6 +525,46 @@
       card.classList.remove('complete');
       num.textContent = stepId === 'step1' ? '1' : stepId === 'step2' ? '2' : '3';
     }
+    updateReadyPill();
+  }
+
+  // Show the "Ready to Sync" pill only once all three step cards are green.
+  // Reading the .complete class keeps this in lockstep with whatever turned
+  // each step green, with no duplicated completion logic.
+  function updateReadyPill() {
+    const pill = document.getElementById('chip-ready');
+    if (!pill) return;
+    const allComplete = ['step1', 'step2', 'step3'].every((id) => {
+      const c = document.getElementById(id);
+      return c && c.classList.contains('complete');
+    });
+    pill.style.display = allComplete ? '' : 'none';
+  }
+
+  function setupReadyPillHelp() {
+    const btn = document.getElementById('chip-how-btn');
+    const pop = document.getElementById('chip-how-pop');
+    if (!btn || !pop) return;
+    function close() {
+      pop.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    btn.addEventListener('click', () => {
+      if (!pop.hidden) { close(); return; }
+      pop.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('keydown', onKey);
+      setTimeout(() => {
+        document.addEventListener('click', function onDoc(ev) {
+          if (!pop.contains(ev.target) && ev.target !== btn) {
+            close();
+            document.removeEventListener('click', onDoc);
+          }
+        });
+      }, 0);
+    });
   }
 
   function getStep2IconUrl(name) {
@@ -541,7 +592,7 @@
 
   function setHeaderLogoUrl() {
     const logo = document.getElementById('header-logo');
-    if (logo) logo.src = chrome.runtime.getURL('icons/logo-full.jpg');
+    if (logo) logo.src = chrome.runtime.getURL('icons/Chrysalis-Logo.svg');
     const syncHistoryLink = document.getElementById('setup-sync-history-link');
     if (syncHistoryLink) syncHistoryLink.href = chrome.runtime.getURL('sync-history/sync-history.html');
   }
@@ -551,8 +602,8 @@
     const plBtn = document.getElementById('load-pl-accounts');
     const monarchText = monarchBtn?.querySelector('.btn-text');
     const plText = plBtn?.querySelector('.btn-text');
-    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh Accounts from Monarch' : 'Load Accounts from Monarch';
-    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh Accounts from ProjectionLab' : 'Load Accounts from ProjectionLab';
+    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh Monarch Accounts' : 'Load Monarch Accounts';
+    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh ProjectionLab Accounts' : 'Load ProjectionLab Accounts';
   }
 
   // For now, keep saved mappings exactly as they were persisted.
@@ -629,6 +680,7 @@
     await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', true);
+    updateMapGate();
     setFinalLoadStatus(document.getElementById('key-saved-msg'), 'Key saved!');
   };
 
@@ -640,6 +692,7 @@
     updateChips();
     updateStepComplete('step1', false);
     setStepCollapsed('step1', false);
+    updateMapGate();
     setFinalLoadStatus(document.getElementById('key-saved-msg'), 'API key cleared.');
   };
 
@@ -1892,6 +1945,18 @@
     };
   }
 
+  // Gate the mapping UI: only show the table once the PL key is saved AND
+  // both account lists are loaded (loading PL accounts requires a working key,
+  // so a loaded PL list is the de-facto "validated" signal). Otherwise show
+  // an instructional message in its place.
+  function updateMapGate() {
+    const canMap = !!(plApiKey && plApiKey.trim()) && monarchAccounts.length > 0 && plAccounts.length > 0;
+    const gate = document.getElementById('map-gate');
+    const content = document.getElementById('map-content');
+    if (gate) gate.style.display = canMap ? 'none' : '';
+    if (content) content.style.display = canMap ? '' : 'none';
+  }
+
   function renderMappingRows() {
     const tbody = document.getElementById('map-tbody');
     tbody.innerHTML = '';
@@ -1923,6 +1988,7 @@
       addRowBtn.style.display = noneLeft ? 'none' : '';
       allMappedMsg.style.display = noneLeft ? 'block' : 'none';
     }
+    updateMapGate();
   }
 
   document.getElementById('add-row').onclick = () => {
@@ -1978,6 +2044,7 @@
   }
 
   setupStepToggles();
+  setupReadyPillHelp();
   setupAdvancedSection();
   setHeaderLogoUrl();
   setStep2ButtonIconUrls();

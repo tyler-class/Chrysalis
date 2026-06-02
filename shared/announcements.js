@@ -33,32 +33,17 @@
   // ─── Edit this list to publish announcements ──────────────────────────────
   const ANNOUNCEMENTS = [
     {
-      id: 'v1.0.6',
-      title: 'New release — v1.0.6',
+      id: 'v1.1.0',
+      title: 'New release — v1.1.0',
       body:
-        '<strong>Now works beyond Chrome.</strong> The popup’s Setup button did ' +
-        'nothing on Chromium browsers other than Google Chrome (e.g. Dia, Arc, ' +
-        'Brave, Edge, Opera, Vivaldi); it now opens correctly on all of them, as ' +
-        'well as Chrome itself.<br><br>' +
-        'Still included from v1.0.5: the Monarch “Failed to fetch” fix and the new ' +
-        '<strong>ProjectionLab Early Access</strong> toggle, plus reliability fixes. ' +
-        'If your ProjectionLab account is on Early Access, open ' +
-        '<strong>Setup → ProjectionLab Settings</strong> and turn on ' +
-        '“Opt in to ProjectionLab Early Access” — it’s a manual step.',
-      linkText: 'Read the full release notes ↗',
-      linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
-      expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
-    },
-    {
-      id: 'v1.0.5',
-      title: 'New release — v1.0.5',
-      body:
-        'This update fixes the Monarch “Failed to fetch” outage and adds a new ' +
-        '<strong>ProjectionLab Early Access</strong> toggle, plus reliability fixes. ' +
-        'If your ProjectionLab account is on Early Access, open ' +
-        '<strong>Setup → ProjectionLab Settings</strong> and turn on ' +
-        '“Opt in to ProjectionLab Early Access” — it’s a manual step.',
-      linkText: 'Read the full release notes ↗',
+        '<strong>A total visual refresh.</strong> v1.1.0 is a top-to-bottom redesign ' +
+        "of Chrysalis's interface, plus a new logo. There are no changes to core " +
+        'functionality — but the tool should be more enjoyable to use and easier to ' +
+        'navigate and understand with the new UI.<br><br>' +
+        '<strong>Catching up from v1.0.6:</strong> restored Monarch syncing, a manual ' +
+        '<strong>ProjectionLab Early Access</strong> toggle, and support for Chromium ' +
+        'browsers beyond Chrome (Arc, Brave, Edge, Opera, Vivaldi).',
+      linkText: 'Read the release notes ↗',
       linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
       expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
     },
@@ -119,28 +104,34 @@
       .chrysalis-announcement {
         position: relative;
         margin-bottom: 14px;
-        padding: 12px 38px 12px 14px;
-        border: 1px solid var(--border, #e5e7eb);
-        border-radius: 12px;
-        background: var(--gradient-subtle, linear-gradient(135deg, rgba(253,107,47,0.08) 0%, rgba(37,99,235,0.08) 100%));
+        padding: 13px 38px 13px 16px;
+        border: 1px solid var(--line, #e6e2d8);
+        border-left: 3px solid var(--ink, #16150f);
+        border-radius: 14px;
+        background: var(--card, #ffffff);
+        box-shadow: var(--shadow-md, 0 6px 16px -6px rgba(28,25,15,.12), 0 2px 6px -2px rgba(28,25,15,.08));
         font-size: 12px;
         line-height: 1.5;
-        color: var(--text, #111827);
+        color: var(--ink, #16150f);
       }
-      .chrysalis-announcement-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-      .chrysalis-announcement-body { color: var(--text, #111827); }
+      .chrysalis-announcement-title {
+        font-weight: 700; font-size: 13.5px; margin-bottom: 4px;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .chrysalis-announcement-title::before { content: "📣"; font-size: 14px; }
+      .chrysalis-announcement-body { color: var(--ink-2, #56524a); }
       .chrysalis-announcement-link {
         display: inline-block; margin-top: 8px;
-        font-weight: 600; color: var(--accent, #2563eb); text-decoration: none;
+        font-weight: 700; color: var(--ink, #16150f); text-decoration: underline;
       }
       .chrysalis-announcement-link:hover { text-decoration: underline; }
       .chrysalis-announcement-dismiss {
         position: absolute; top: 8px; right: 8px;
         background: none; border: none; cursor: pointer;
-        font-size: 18px; line-height: 1; color: var(--muted, #6b7280);
+        font-size: 18px; line-height: 1; color: var(--ink-2, #56524a);
         padding: 2px 7px; border-radius: 6px; font-family: inherit;
       }
-      .chrysalis-announcement-dismiss:hover { color: var(--text, #111827); background: rgba(0,0,0,0.05); }
+      .chrysalis-announcement-dismiss:hover { color: var(--ink, #16150f); background: rgba(0,0,0,0.05); }
     `;
     document.head.appendChild(style);
     stylesInjected = true;

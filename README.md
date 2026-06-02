@@ -1,8 +1,20 @@
-<img src="icons/icon128.png" width="72" align="left" style="margin-right: 16px; margin-bottom: 8px;">
+<div align="center">
 
-# Chrysalis
+<img src="icons/icon128.png" width="96" alt="Chrysalis">
 
-**Sync Monarch Money balances to ProjectionLab.**
+<h1>Chrysalis</h1>
+
+<strong>Sync Monarch Money balances into ProjectionLab — in one click.</strong>
+
+<p>🟧 <strong>Monarch</strong> <em>(source)</em> &nbsp;→&nbsp; 🟦 <strong>ProjectionLab</strong> <em>(destination)</em></p>
+
+<p>
+  <a href="https://chromewebstore.google.com/detail/chrysalis/jjlpglgnadfdnfflgnpgcamfeacbhood"><img src="https://img.shields.io/badge/Add%20to%20Chrome-1b1a14?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Add to Chrome"></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/always%20free-0f8f63?style=for-the-badge" alt="Always free">
+</p>
+
+</div>
 
 Chrysalis is a Chrome extension that pulls your live account balances from Monarch Money and pushes them into ProjectionLab with one click. No scripts, no terminal, no copy-pasting numbers by hand.
 
@@ -10,54 +22,35 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.0.6 (2026-06-01)
+## 📣 Release Announcement — v1.1.0 (2026-06-02)
 
-This release makes Chrysalis work on Chromium browsers beyond Google Chrome. It
-also carries forward everything from v1.0.5: restored Monarch syncing after an
-upstream change broke it, ProjectionLab Early Access as a manual opt-in, and
-several reliability fixes contributed by the community.
+This version is a total visual refresh — a top-to-bottom redesign of Chrysalis's
+interface and a new logo. There are **no changes to core functionality**, but the tool
+should be more enjoyable to use and easier to navigate and understand with the new UI.
 
-### ⚠️ Action needed — ProjectionLab Early Access users only
+<details>
+<summary><strong>Recent release — v1.0.6</strong></summary>
 
-Early Access is now **opt-in**. If your ProjectionLab account is on the Early
-Access program (`ea.projectionlab.com`), open **Setup → ProjectionLab Settings**
-and turn on **“Opt in to ProjectionLab Early Access.”** Everyone else needs to do
-nothing — Chrysalis now uses the standard `app.projectionlab.com` by default.
+<br>
 
-### What's new & fixed
+**v1.0.6** focused on compatibility and reliability:
 
-- **Fixed: works on Chromium browsers beyond Chrome.** The popup’s **Setup**
-  button silently did nothing on Chromium-based browsers other than Google Chrome
-  — including **Dia, Arc, Brave, Microsoft Edge, Opera, and Vivaldi** — because
-  those browsers don’t implement `chrome.runtime.openOptionsPage()` reliably.
-  Chrysalis now opens the setup page with a portable method that works
-  everywhere, so the Setup button works on those browsers as well as Chrome
-  itself.
-- **Fixed: Monarch “Failed to fetch.”** Monarch changed how its API
-  authenticates, which broke account loading and balance sync for everyone.
-  Chrysalis now authenticates with the Monarch tab's CSRF token (read in-page via
-  a `MAIN`-world script) instead of the old localStorage token heuristics — and
-  with **no new browser permissions**. _(Closes #13, #17, #18, #19, #21.)_
-- **New: ProjectionLab Early Access toggle.** A manual switch in Setup →
-  ProjectionLab Settings controls whether Chrysalis uses `ea.projectionlab.com`
-  (when on) or the default `app.projectionlab.com` (when off). Previously the
-  Early Access endpoint could be chosen automatically, which was wrong for users
-  not enrolled in it. Account retrieval and balance pushes both honor the toggle.
-  _(Closes #14.)_
-- **Fixed: account-mapping storage quota.** Mappings are now stored in chunks, so
-  larger setups no longer hit Chrome's per-item `storage.sync` limit.
-  _(Thanks @billda — #10.)_
-- **Fixed: Coinbase balances.** Accounts that report a zero `currentBalance` but a
-  non-zero display balance (e.g. some Coinbase accounts) now sync the value shown
-  in the app. _(Thanks @billda — #12.)_
-- **New: in-app announcement banner.** The popup can now surface dismissable
-  release notes like this one. It remembers your dismissal and auto-expires so it
-  won't nag you.
+- **Works on Chromium browsers beyond Chrome** (Dia, Arc, Brave, Edge, Opera, Vivaldi)
+  — the **Setup** button now opens reliably everywhere.
+- **Fixed Monarch "Failed to fetch."** Auth now uses the Monarch tab's CSRF token (a
+  `MAIN`-world script) with **no new browser permissions**. _(#13, #17, #18, #19, #21)_
+- **ProjectionLab Early Access is a manual opt-in** toggle in Setup, rather than being
+  chosen automatically. _(#14)_
+- **Account-mapping storage** is chunked so larger setups don't hit Chrome's
+  `storage.sync` per-item limit. _(Thanks @billda — #10)_
+- **Coinbase balances** that report a zero `currentBalance` now sync the displayed
+  value. _(Thanks @billda — #12)_
+- **In-app announcement banner** added to the popup.
 
-### Credits
+_Credits: CSRF auth fix by @seanius (#22), `MAIN`-world approach suggested by
+@incorvia; storage & Coinbase fixes by @billda._
 
-CSRF auth fix by @seanius (#22), using the `MAIN`-world approach suggested by
-@incorvia. Storage-quota and Coinbase fixes by @billda (#10, #12).
+</details>
 
 ---
 
@@ -212,8 +205,6 @@ The result list stays visible until you run the next sync, so you can close and 
 
 <kbd><img src="screenshots/popup-just-synced.png" width="400"></kbd>
 
-<kbd><img src="screenshots/popup-ready-to-sync-subsequent.png" width="400"></kbd>
-
 ### Sync history
 
 Click **View History** on the setup page, or the same link in the extension popup when you are on a Monarch tab. The Sync History keeps a log of recent syncs with timestamps and outcomes including the Monarch accounts synced to which ProjectionLab target accounts, the amount that was synced (positive or negative), and a status of that account's sync job. Useful for confirming a sync ran correctly or diagnosing a pattern of failures. The most recent Sync History shows up under a collapsed gray section on the popup after you have run at least 1 sync.
@@ -245,10 +236,6 @@ To help ensure people don't accidentally take an unreversible action on their Ch
 ### Show sync debug details
 
 This checkbox will inject more detailed, technical debug details in 2 places: (1) on the extension popup after a sync job has run, and (2) at the bottom of any sync record under Sync History. If something is wonky, this is a good place to start.
-
-<kbd><img src="screenshots/popup-with-debug.png" width="400"></kbd>
-
-<kbd><img src="screenshots/sync-history-run-with-debug.png" width="400"></kbd>
 
 ### Run sync automatically
 
