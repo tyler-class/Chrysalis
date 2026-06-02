@@ -23,7 +23,7 @@
 
       /* primary action = ink, NOT a gradient */
       --primary: #1b1a14;
-      --primary-hover: #000000;
+      --primary-hover: #34312a;
 
       /* semantic state */
       --good: #0f8f63;
@@ -220,6 +220,8 @@
     }
     .chip-how-pop[hidden] { display: none; }
     .chip-how-pop strong { color: var(--ink); font-weight: 600; }
+    .chip-how-pop a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+    .chip-how-pop a:hover { color: #000; }
     .chip-how-pop ol { margin: 8px 0 0; padding-left: 18px; }
     .chip-how-pop li { margin-bottom: 4px; }
     @keyframes chip-glow {
@@ -345,7 +347,7 @@
       color: #fff;
       box-shadow: var(--shadow-md);
     }
-    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-lg); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
     .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; background: var(--line-strong); color: var(--ink-3); }
     /* Load from Monarch — amber data-source identity */
     .btn-monarch {
@@ -902,7 +904,7 @@
         <div class="chip-how-pop" id="chip-how-pop" role="dialog" aria-label="How to run a sync" hidden>
           <strong>To run a sync:</strong>
           <ol>
-            <li>Open <strong>app.monarch.com</strong> in a browser tab.</li>
+            <li>Open <a href="https://app.monarch.com" target="_blank" rel="noopener noreferrer">app.monarch.com</a> in a browser tab.</li>
             <li>Click the Chrysalis extension icon.</li>
             <li>Click <strong>Sync Now</strong>.</li>
           </ol>
@@ -1011,7 +1013,7 @@
 
       <div class="step-card advanced-card collapsed advanced-locked" id="advanced-card">
       <div class="advanced-head step-head" tabindex="0" role="button" aria-expanded="false" aria-controls="advanced-body">
-        <span class="step-num" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></span>
+        <span class="step-num" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
         <span class="step-title">Advanced</span>
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>

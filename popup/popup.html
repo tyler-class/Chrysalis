@@ -23,7 +23,7 @@
 
       /* primary action = ink, NOT a gradient */
       --primary: #1b1a14;
-      --primary-hover: #000000;
+      --primary-hover: #34312a;
 
       /* semantic state */
       --good: #0f8f63;
@@ -178,7 +178,7 @@
       width: 100%;
       box-shadow: var(--shadow-md);
     }
-    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-md); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
     .btn-primary:disabled {
       background: var(--line-strong);
       color: var(--ink-3);
