@@ -353,6 +353,8 @@
       box-shadow: var(--shadow-md);
     }
     .btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    /* Save Key: keep the colour/shadow hover, but no lift */
+    #save-key:hover:not(:disabled) { transform: none; }
     .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; background: var(--line-strong); color: var(--ink-3); }
     /* Load from Monarch — amber data-source identity */
     .btn-monarch {
