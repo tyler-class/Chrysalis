@@ -89,7 +89,8 @@
       height: 52px;
       border-radius: 15px;
       flex-shrink: 0;
-      object-fit: contain;
+      object-fit: cover;
+      background: #fff;
       display: block;
       box-shadow: var(--shadow-sm);
     }
@@ -260,7 +261,15 @@
       flex-shrink: 0;
       transition: background 0.2s ease, color 0.2s ease;
     }
-    .step-card.complete .step-num { background: var(--good); color: #fff; }
+    .step-card.complete .step-num {
+      background-color: var(--good);
+      /* hide the textual "✓" that setup.js sets, show a clean SVG check instead */
+      color: transparent;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13l4 4L19 7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 20px 20px;
+    }
     .step-title { font-weight: 600; font-size: 17px; color: var(--ink); }
     label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
     input[type="password"],
@@ -368,7 +377,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--ink-3);
+      color: var(--ink);
       border-bottom: 1px solid var(--line);
       background: var(--canvas-2);
     }
@@ -392,8 +401,8 @@
     .map-cell-pl .add-dropdown-search { min-width: 0; }
     .map-arrow {
       font-size: 16px;
-      font-weight: 600;
-      color: var(--monarch);
+      font-weight: 700;
+      color: var(--ink);
       padding: 0 10px;
       white-space: nowrap;
     }
