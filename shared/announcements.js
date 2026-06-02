@@ -119,16 +119,22 @@
       .chrysalis-announcement {
         position: relative;
         margin-bottom: 14px;
-        padding: 12px 38px 12px 14px;
+        padding: 13px 38px 13px 16px;
         border: 1px solid var(--line, #e6e2d8);
+        border-left: 3px solid var(--ink, #16150f);
         border-radius: 14px;
-        background: var(--gradient-subtle, #eceae3);
+        background: var(--card, #ffffff);
+        box-shadow: var(--shadow-md, 0 6px 16px -6px rgba(28,25,15,.12), 0 2px 6px -2px rgba(28,25,15,.08));
         font-size: 12px;
         line-height: 1.5;
         color: var(--ink, #16150f);
       }
-      .chrysalis-announcement-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-      .chrysalis-announcement-body { color: var(--ink, #16150f); }
+      .chrysalis-announcement-title {
+        font-weight: 700; font-size: 13.5px; margin-bottom: 4px;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .chrysalis-announcement-title::before { content: "📣"; font-size: 14px; }
+      .chrysalis-announcement-body { color: var(--ink-2, #56524a); }
       .chrysalis-announcement-link {
         display: inline-block; margin-top: 8px;
         font-weight: 700; color: var(--ink, #16150f); text-decoration: underline;

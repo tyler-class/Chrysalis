@@ -423,45 +423,68 @@
       background: var(--canvas-2);
       box-shadow: var(--shadow-sm);
     }
+    /* Rating prompt — the loudest callout: dark card, gold stars, glowing CTA */
     .rating-prompt {
-      margin-top: 14px;
-      padding: 12px 14px;
-      background: var(--gradient-subtle);
-      border: 1px solid var(--line);
+      margin-top: 16px;
+      padding: 16px 16px 14px;
+      background: var(--primary);
+      border: 1px solid #2c2a20;
       border-radius: var(--r-md);
-      font-size: 12px;
-      color: var(--ink);
-      line-height: 1.45;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #ffffff;
+      line-height: 1.5;
+      box-shadow: var(--shadow-lg);
+      animation: rating-glow 2.8s ease-in-out infinite;
+    }
+    .rating-prompt::before {
+      content: "★★★★★";
+      display: block;
+      color: #ffc02e;
+      font-size: 16px;
+      letter-spacing: 3px;
+      margin-bottom: 7px;
     }
     .rating-prompt-actions {
-      margin-top: 10px;
+      margin-top: 13px;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 14px;
     }
     .rating-prompt-store-link {
       font-weight: 700;
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--ink);
-      text-decoration: underline;
+      background: #ffc02e;
+      text-decoration: none;
+      padding: 8px 15px;
+      border-radius: 999px;
+      box-shadow: 0 2px 8px rgba(255,192,46,0.35);
+      transition: background 0.15s, transform 0.05s;
     }
-    .rating-prompt-store-link:hover {
-      text-decoration: underline;
-    }
+    .rating-prompt-store-link:hover { background: #ffce52; text-decoration: none; }
+    .rating-prompt-store-link:active { transform: translateY(1px); }
     .rating-prompt-dismiss {
       background: none;
       border: none;
       padding: 0;
       font-size: 12px;
       font-weight: 500;
-      color: var(--muted);
+      color: rgba(255,255,255,0.6);
       cursor: pointer;
       font-family: inherit;
       text-decoration: underline;
     }
     .rating-prompt-dismiss:hover {
-      color: var(--text);
+      color: #ffffff;
+    }
+    @keyframes rating-glow {
+      0%, 100% { box-shadow: 0 10px 26px -10px rgba(28,25,15,.40), 0 0 0 0 rgba(255,192,46,0.0); }
+      50%      { box-shadow: 0 12px 30px -10px rgba(28,25,15,.50), 0 0 0 3px rgba(255,192,46,0.30); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .rating-prompt { animation: none; }
     }
   </style>
 </head>
