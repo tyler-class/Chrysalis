@@ -551,8 +551,8 @@
     const plBtn = document.getElementById('load-pl-accounts');
     const monarchText = monarchBtn?.querySelector('.btn-text');
     const plText = plBtn?.querySelector('.btn-text');
-    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh Accounts from Monarch' : 'Load Accounts from Monarch';
-    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh Accounts from ProjectionLab' : 'Load Accounts from ProjectionLab';
+    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh Monarch Accounts' : 'Load Monarch Accounts';
+    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh ProjectionLab Accounts' : 'Load ProjectionLab Accounts';
   }
 
   // For now, keep saved mappings exactly as they were persisted.
