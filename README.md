@@ -26,54 +26,57 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.0.6 (2026-06-01)
+## 📣 Release Announcement — v1.1.0 (2026-06-02)
 
-This release makes Chrysalis work on Chromium browsers beyond Google Chrome. It
-also carries forward everything from v1.0.5: restored Monarch syncing after an
-upstream change broke it, ProjectionLab Early Access as a manual opt-in, and
-several reliability fixes contributed by the community.
+**A complete visual refresh.** v1.1.0 is a top-to-bottom redesign of the Chrysalis
+interface — the setup page, the popup, and the sync history — plus a brand-new logo
+and toolbar icon. **None of the core functionality changed:** syncing, account
+mapping, authentication, and every setting behave exactly as before. This release is
+purely about making Chrysalis look and feel more modern, polished, and easy to use.
 
-### ⚠️ Action needed — ProjectionLab Early Access users only
+### What's new
 
-Early Access is now **opt-in**. If your ProjectionLab account is on the Early
-Access program (`ea.projectionlab.com`), open **Setup → ProjectionLab Settings**
-and turn on **“Opt in to ProjectionLab Early Access.”** Everyone else needs to do
-nothing — Chrysalis now uses the standard `app.projectionlab.com` by default.
+- **Redesigned UI across the board.** A new design system — a warm, calm canvas with
+  lifted white cards and a clear type hierarchy — replaces the old flat look. The
+  setup page, popup, and sync history now share one cohesive style.
+- **Color that means something.** Amber always signals **Monarch** (the source), blue
+  always signals **ProjectionLab** (the destination), and green means
+  **done / configured** — so the data flow reads left-to-right at a glance.
+- **New logo & icon.** A fresh Chrysalis mark, with a rounded, drop-shadowed toolbar
+  icon that sits cleanly in your browser bar.
+- **Clearer setup.** Status pills show your configuration at a glance, completed steps
+  flip to a green check, the mapping table stays hidden until you're ready for it, and
+  a new **Ready to Sync** indicator (with a quick **How?** guide) appears once
+  everything is set.
+- **Friendlier popup.** Sync results, the most-recent-sync card, and announcements all
+  got a cleaner, more readable treatment.
 
-### What's new & fixed
+Everything you already set up — your API key, mappings, and history — carries over
+untouched.
 
-- **Fixed: works on Chromium browsers beyond Chrome.** The popup’s **Setup**
-  button silently did nothing on Chromium-based browsers other than Google Chrome
-  — including **Dia, Arc, Brave, Microsoft Edge, Opera, and Vivaldi** — because
-  those browsers don’t implement `chrome.runtime.openOptionsPage()` reliably.
-  Chrysalis now opens the setup page with a portable method that works
-  everywhere, so the Setup button works on those browsers as well as Chrome
-  itself.
-- **Fixed: Monarch “Failed to fetch.”** Monarch changed how its API
-  authenticates, which broke account loading and balance sync for everyone.
-  Chrysalis now authenticates with the Monarch tab's CSRF token (read in-page via
-  a `MAIN`-world script) instead of the old localStorage token heuristics — and
-  with **no new browser permissions**. _(Closes #13, #17, #18, #19, #21.)_
-- **New: ProjectionLab Early Access toggle.** A manual switch in Setup →
-  ProjectionLab Settings controls whether Chrysalis uses `ea.projectionlab.com`
-  (when on) or the default `app.projectionlab.com` (when off). Previously the
-  Early Access endpoint could be chosen automatically, which was wrong for users
-  not enrolled in it. Account retrieval and balance pushes both honor the toggle.
-  _(Closes #14.)_
-- **Fixed: account-mapping storage quota.** Mappings are now stored in chunks, so
-  larger setups no longer hit Chrome's per-item `storage.sync` limit.
-  _(Thanks @billda — #10.)_
-- **Fixed: Coinbase balances.** Accounts that report a zero `currentBalance` but a
-  non-zero display balance (e.g. some Coinbase accounts) now sync the value shown
-  in the app. _(Thanks @billda — #12.)_
-- **New: in-app announcement banner.** The popup can now surface dismissable
-  release notes like this one. It remembers your dismissal and auto-expires so it
-  won't nag you.
+<details>
+<summary><strong>Previous release — v1.0.6</strong></summary>
 
-### Credits
+<br>
 
-CSRF auth fix by @seanius (#22), using the `MAIN`-world approach suggested by
-@incorvia. Storage-quota and Coinbase fixes by @billda (#10, #12).
+**v1.0.6** focused on compatibility and reliability:
+
+- **Works on Chromium browsers beyond Chrome** (Dia, Arc, Brave, Edge, Opera, Vivaldi)
+  — the **Setup** button now opens reliably everywhere.
+- **Fixed Monarch "Failed to fetch."** Auth now uses the Monarch tab's CSRF token (a
+  `MAIN`-world script) with **no new browser permissions**. _(#13, #17, #18, #19, #21)_
+- **ProjectionLab Early Access is a manual opt-in** toggle in Setup, rather than being
+  chosen automatically. _(#14)_
+- **Account-mapping storage** is chunked so larger setups don't hit Chrome's
+  `storage.sync` per-item limit. _(Thanks @billda — #10)_
+- **Coinbase balances** that report a zero `currentBalance` now sync the displayed
+  value. _(Thanks @billda — #12)_
+- **In-app announcement banner** added to the popup.
+
+_Credits: CSRF auth fix by @seanius (#22), `MAIN`-world approach suggested by
+@incorvia; storage & Coinbase fixes by @billda._
+
+</details>
 
 ---
 
