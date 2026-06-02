@@ -42,7 +42,7 @@
         'navigate and understand with the new UI.',
       linkText: 'Read the release notes ↗',
       linkUrl: 'https://github.com/tyler-class/Chrysalis#readme',
-      expires: '2026-09-01', // disappears on 2026-09-01 (shows through 2026-08-31)
+      expires: '2026-07-30', // disappears on 2026-07-30 (shows through 2026-07-29)
     },
   ];
   // ──────────────────────────────────────────────────────────────────────────
