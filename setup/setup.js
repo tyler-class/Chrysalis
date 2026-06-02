@@ -541,7 +541,7 @@
 
   function setHeaderLogoUrl() {
     const logo = document.getElementById('header-logo');
-    if (logo) logo.src = chrome.runtime.getURL('icons/logo-full.jpg');
+    if (logo) logo.src = chrome.runtime.getURL('icons/Chrysalis-Logo.svg');
     const syncHistoryLink = document.getElementById('setup-sync-history-link');
     if (syncHistoryLink) syncHistoryLink.href = chrome.runtime.getURL('sync-history/sync-history.html');
   }
