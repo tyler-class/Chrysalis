@@ -256,6 +256,9 @@
       transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
     .step-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    /* The hover transform gives each card its own stacking context, so a hovered card
+       later in the page would paint over step 3's dropdowns. Keep step 3 on top. */
+    #step3 { position: relative; z-index: 2; }
     .step-card.complete { border-color: var(--good-line); background: var(--card); }
     .step-head {
       display: flex;
@@ -335,6 +338,8 @@
       box-shadow: 0 0 0 3px rgba(27,26,20,0.14);
     }
     .hint { font-size: 13px; color: var(--ink-2); margin-bottom: 14px; line-height: 1.5; }
+    .hint-list { margin-top: 0; padding-left: 20px; }
+    .hint-list li + li { margin-top: 4px; }
     .btn {
       font-family: inherit;
       font-size: 14px;
@@ -523,6 +528,7 @@
     }
     /* ProjectionLab destination control — blue data-source identity */
     .map-cell-pl .add-dropdown-search,
+    .sp-add .add-dropdown-search,
     select.map-select {
       background-color: var(--projlab-pill-bg);
       border: 1px solid var(--projlab);
@@ -530,8 +536,10 @@
       color: var(--projlab-pill-ink);
       font-weight: 600;
     }
-    .map-cell-pl .add-dropdown-search::placeholder { color: var(--projlab-pill-ink); opacity: 0.7; }
+    .map-cell-pl .add-dropdown-search::placeholder,
+    .sp-add .add-dropdown-search::placeholder { color: var(--projlab-pill-ink); opacity: 0.7; }
     .map-cell-pl .add-dropdown-search:focus,
+    .sp-add .add-dropdown-search:focus,
     select.map-select:focus {
       border-color: var(--projlab);
       box-shadow: 0 0 0 3px rgba(47,107,255,0.18);
@@ -880,9 +888,26 @@
     .alloc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--good); }
     .alloc-dot.under { background: var(--warn); }
     .alloc-dot.over, .alloc-dot.invalid { background: var(--red); }
-    .note-ic { display: inline-flex; color: var(--monarch-pill-ink); opacity: .75; cursor: help; }
+    .note-ic {
+      display: inline-flex; align-items: center; color: var(--monarch-pill-ink); opacity: .75; cursor: pointer;
+      background: none; border: 0; padding: 2px; margin: -2px 0; border-radius: 4px;
+    }
+    .note-ic:hover { opacity: 1; }
+    .note-ic:focus-visible { outline: 2px solid var(--monarch); outline-offset: 1px; opacity: 1; }
     .note-ic svg { width: 13px; height: 13px; display: block; }
     .note-ic[hidden] { display: none; }
+    .note-pop {
+      position: fixed; z-index: 2050; width: max-content; max-width: 280px;
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-sm); box-shadow: var(--shadow-lg);
+      padding: 10px 12px; font-size: 12.5px; color: var(--ink);
+    }
+    .note-pop[hidden] { display: none; }
+    .note-pop-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; max-height: 200px; overflow-y: auto; }
+    .note-pop-edit {
+      margin-top: 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--projlab-ink);
+      background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .note-pop-edit:hover { color: var(--projlab); }
     .split-btn {
       display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -3px 0; padding: 0;
       background: none; border: 1px solid transparent; border-radius: 6px; color: var(--monarch-pill-ink); cursor: pointer; opacity: .75;
@@ -895,7 +920,9 @@
     .split-msg.under { color: var(--warn); }
     .split-msg.over { color: var(--red); }
     .split-fix { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-    .opt-split-meta { float: right; margin-left: 12px; font-size: 11px; font-weight: 600; color: var(--warn); }
+    /* Second line under a dropdown option's name, inside its hover fill. */
+    .opt-split-meta, .opt-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--warn); }
+    .opt-sub { font-weight: 500; color: var(--ink-3); }
     .pl-preview { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; font-variant-numeric: tabular-nums; }
     .pl-preview.blocked { color: var(--red); }
     tr.row-flash td { animation: row-flash 1.8s ease-out; }
@@ -915,7 +942,11 @@
     .sp-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; margin: 14px 0 4px; background: repeating-linear-gradient(135deg, var(--canvas-2) 0 5px, var(--line) 5px 7px); }
     .sp-bar.over { box-shadow: 0 0 0 2px var(--red); }
     .sp-seg { display: block; height: 100%; }
-    .sp-c0 { background: var(--projlab); } .sp-c1 { background: #7a9dff; } .sp-c2 { background: #b7caff; } .sp-c3 { background: #5a7bd0; }
+    /* 12 distinct share colors, used in order (SPLIT_COLOR_COUNT in setup.js). */
+    .sp-c0 { background: var(--projlab); }  .sp-c1 { background: #7a9dff; }  .sp-c2 { background: #b7caff; }
+    .sp-c3 { background: #8b5cf6; }        .sp-c4 { background: #10a36f; }  .sp-c5 { background: #f08a3c; }
+    .sp-c6 { background: #e3b324; }        .sp-c7 { background: #e5579a; }  .sp-c8 { background: #9a6a43; }
+    .sp-c9 { background: #14a3a3; }        .sp-c10 { background: #c4b5fd; } .sp-c11 { background: #64748b; }
     .sp-total { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
     .sp-total.ok { color: var(--good); } .sp-total.under { color: var(--warn); } .sp-total.over, .sp-total.invalid { color: var(--red); }
     .sp-legs { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
@@ -932,13 +963,9 @@
     .sp-rm:hover { color: var(--red); }
     .sp-add { margin-top: 10px; }
     .sp-label { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
-    .sp-add select {
-      width: 100%; max-width: none; margin: 0; font: inherit; font-size: 12px; font-weight: 600; padding: 7px 30px 7px 10px;
-      background-color: var(--projlab-pill-bg); border: 1px dashed var(--projlab); color: var(--projlab-pill-ink); border-radius: 8px;
-      -webkit-appearance: none; appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23163a8f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center;
-    }
+    .sp-add .monarch-add-widget { display: block; }
+    /* Fixed (positioned by setup.js) so the split panel's scroll box doesn't clip the menu. */
+    .sp-add .monarch-add-panel { position: fixed; top: auto; left: auto; margin-top: 0; min-width: 0; z-index: 2100; }
     .sp-flash { margin-top: 10px; font-size: 12px; color: var(--good); font-weight: 600; }
     .sp-notes { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
     .sp-note-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
@@ -1081,11 +1108,11 @@
         Before you can map accounts, save your ProjectionLab API key in Step 1, then load accounts from Monarch and ProjectionLab in Step 2.
       </div>
       <div id="map-content">
-      <p class="hint">
-        For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.
-        For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.
-        To send part of an investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.
-      </p>
+      <ul class="hint hint-list">
+        <li>For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.</li>
+        <li>For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.</li>
+        <li>To send part of an investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
+      </ul>
       <table class="map-table">
         <thead>
           <tr>

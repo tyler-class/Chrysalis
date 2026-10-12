@@ -1243,8 +1243,11 @@
             fuzzyMatch(query, a.name) ||
             fuzzyMatch(query, getPLCategory(a))
         );
+    return groupPLByCategory(filtered);
+  }
+  function groupPLByCategory(accounts) {
     const byCategory = new Map();
-    for (const a of filtered) {
+    for (const a of accounts) {
       const cat = getPLCategory(a);
       if (!byCategory.has(cat)) byCategory.set(cat, []);
       byCategory.get(cat).push(a);
@@ -1917,6 +1920,7 @@
 
   const SPLIT_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>';
   const NOTE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  const SPLIT_COLOR_COUNT = 12; // matches the .sp-c0 – .sp-c11 classes in setup.html
   const SPLIT_COMMIT_DELAY_MS = 600;
   const NOTE_SAVE_DELAY_MS = 700;
 
@@ -1925,6 +1929,9 @@
   let previewPlans = new Map();
   let flashPlId = null;
   let splitPanel = null; // { sourceId, anchor: mapping, flash: string }
+  let splitToMenuPlace = null; // repositions the open "Split to" menu, if any
+  const SPLIT_FLASH_SHOW_MS = 5000;
+  let splitFlashTimers = null;
   let splitCommitTimer = null;
   const pendingSplitTouches = new Set();
   let noteSaveTimer = null;
@@ -2064,12 +2071,17 @@
       dot.setAttribute('role', 'img');
       dot.setAttribute('aria-label', tip);
       tag.appendChild(dot);
-      const noteIcon = document.createElement('span');
+      const noteIcon = document.createElement('button');
+      noteIcon.type = 'button';
       noteIcon.className = 'note-ic';
       noteIcon.dataset.src = sourceId;
-      noteIcon.setAttribute('role', 'img');
       noteIcon.innerHTML = NOTE_ICON_SVG;
       updateNoteIcon(noteIcon);
+      noteIcon.addEventListener('mouseenter', () => showNotePop(noteIcon, sourceId, mapping));
+      noteIcon.addEventListener('mouseleave', scheduleHideNotePop);
+      noteIcon.addEventListener('focus', () => showNotePop(noteIcon, sourceId, mapping));
+      noteIcon.addEventListener('blur', (e) => { if (!notePopEl.contains(e.relatedTarget)) scheduleHideNotePop(); });
+      noteIcon.addEventListener('click', (e) => { e.stopPropagation(); showNotePop(noteIcon, sourceId, mapping); });
       tag.appendChild(noteIcon);
     }
 
@@ -2081,15 +2093,18 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'split-btn';
-      const isOpen = !!(splitPanel && splitPanel.sourceId === sourceId && splitPanel.anchor === mapping);
-      btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      btn.dataset.src = sourceId;
+      btn.dataset.mi = String(mi);
+      // Decided at click time: closeSplitPanel() doesn't re-render, so a value captured here goes stale.
+      const isOpenNow = () => !!(splitPanel && splitPanel.sourceId === sourceId && splitPanel.anchor === mapping);
+      btn.setAttribute('aria-expanded', isOpenNow() ? 'true' : 'false');
       btn.setAttribute('aria-haspopup', 'dialog');
       btn.title = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
       btn.setAttribute('aria-label', (Model.isSplitChip(chip) ? 'Edit split of ' : 'Split ') + chip.name);
       btn.innerHTML = SPLIT_ICON_SVG;
       btn.onclick = async (e) => {
         e.stopPropagation();
-        if (isOpen) { closeSplitPanel(); return; }
+        if (isOpenNow()) { closeSplitPanel(); return; }
         if (!Model.isSplitChip(chip)) {
           // Start a split: this row keeps 100% until the user adds shares elsewhere.
           const idx = mapping.monarchAccounts.indexOf(chip);
@@ -2115,13 +2130,71 @@
   function updateNoteIcon(icon) {
     const note = (splitMeta[icon.dataset.src] && splitMeta[icon.dataset.src].note) || '';
     icon.hidden = !note;
-    icon.title = note;
     icon.setAttribute('aria-label', note ? `Note: ${note}` : '');
   }
 
   function refreshNoteIcons() {
     document.querySelectorAll('.note-ic[data-src]').forEach(updateNoteIcon);
   }
+
+  // ---------- note popover (hover a chip's note icon) ----------
+
+  const NOTE_POP_HIDE_DELAY_MS = 150;
+  const notePopEl = document.createElement('div');
+  notePopEl.className = 'note-pop';
+  notePopEl.setAttribute('role', 'tooltip');
+  notePopEl.id = 'note-pop';
+  notePopEl.hidden = true;
+  document.body.appendChild(notePopEl);
+  let notePopHideTimer = null;
+
+  function showNotePop(icon, sourceId, mapping) {
+    if (notePopHideTimer) { clearTimeout(notePopHideTimer); notePopHideTimer = null; }
+    const note = (splitMeta[sourceId] && splitMeta[sourceId].note) || '';
+    if (!note) { hideNotePop(); return; }
+    notePopEl.innerHTML = '';
+    notePopEl.appendChild(el('div', 'note-pop-text', note));
+    const edit = el('button', 'note-pop-edit', 'Edit note');
+    edit.type = 'button';
+    edit.onclick = (e) => {
+      e.stopPropagation();
+      hideNotePop();
+      openSplitPanel(sourceId, mapping);
+      const ta = document.getElementById('split-note');
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        ta.scrollTop = ta.scrollHeight;
+      }
+    };
+    notePopEl.appendChild(edit);
+    icon.setAttribute('aria-describedby', notePopEl.id);
+    notePopEl.hidden = false;
+    const r = icon.getBoundingClientRect();
+    const w = notePopEl.offsetWidth;
+    const h = notePopEl.offsetHeight;
+    const left = Math.min(Math.max(16, r.left - 10), window.innerWidth - w - 16);
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 12 && r.top - h - 6 > 12) top = r.top - h - 6;
+    notePopEl.style.left = `${Math.max(16, left)}px`;
+    notePopEl.style.top = `${Math.max(12, top)}px`;
+  }
+
+  function hideNotePop() {
+    if (notePopHideTimer) { clearTimeout(notePopHideTimer); notePopHideTimer = null; }
+    notePopEl.hidden = true;
+  }
+
+  /** Short delay so the pointer can cross the gap from the icon into the popover. */
+  function scheduleHideNotePop() {
+    if (notePopHideTimer) clearTimeout(notePopHideTimer);
+    notePopHideTimer = setTimeout(hideNotePop, NOTE_POP_HIDE_DELAY_MS);
+  }
+
+  notePopEl.addEventListener('mouseenter', () => { if (notePopHideTimer) { clearTimeout(notePopHideTimer); notePopHideTimer = null; } });
+  notePopEl.addEventListener('mouseleave', scheduleHideNotePop);
+  notePopEl.addEventListener('focusout', (e) => { if (!notePopEl.contains(e.relatedTarget)) scheduleHideNotePop(); });
+  window.addEventListener('scroll', hideNotePop, true);
 
   /** Under/over/missing-percentage messages for the split accounts in one row. */
   function renderRowSplitMessages(mapping, box) {
@@ -2162,7 +2235,7 @@
     }
   }
 
-  /** "Will sync ≈ $X" line under a row's ProjectionLab account, from cached balances. */
+  /** "Estimated sync $X" line under a row's ProjectionLab account, from cached balances. */
   function buildRowPreview(mapping) {
     if (isAssetWithLoanMapping(mapping) || !mapping.plId || !(mapping.monarchAccounts || []).length) return null;
     const plan = previewPlans.get(accountMappings.indexOf(mapping));
@@ -2179,7 +2252,7 @@
       el.classList.add('blocked');
       el.textContent = 'Won’t sync: share is 0%. Give it a share above 0 to sync.';
     } else if (plan.write && plan.sources.every((src) => src.status !== 'missing')) {
-      el.textContent = `Will sync ≈ ${USD_CENTS.format(plan.amountCents / 100)} · from last account refresh`;
+      el.textContent = `Estimated sync ${USD_CENTS.format(plan.amountCents / 100)}, from last account refresh.`;
     } else {
       return null;
     }
@@ -2230,6 +2303,12 @@
     if (!legs.some((l) => accountMappings[l.mappingIndex] === splitPanel.anchor)) {
       splitPanel.anchor = accountMappings[legs[0].mappingIndex];
     }
+    // The anchor can change above, after the rows were drawn; keep the buttons in step.
+    const anchorIndex = String(accountMappings.indexOf(splitPanel.anchor));
+    document.querySelectorAll('.split-btn[data-src]').forEach((b) => {
+      b.setAttribute('aria-expanded', b.dataset.src === sourceId && b.dataset.mi === anchorIndex ? 'true' : 'false');
+    });
+    splitToMenuPlace = null;
     const state = Model.allocationState(entry);
     const balance = cachedBalance(sourceId);
     const amounts = balance != null && state !== 'over' && state !== 'invalid'
@@ -2244,7 +2323,7 @@
     const title = el('div', 'sp-title', `Split ${entry.name}`);
     title.id = 'split-panel-title';
     titles.appendChild(title);
-    titles.appendChild(el('div', 'sp-sub', balance != null ? `${USD_CENTS.format(balance)} at last account refresh · Investments` : 'Investments'));
+    titles.appendChild(el('div', 'sp-sub', balance != null ? `${USD_CENTS.format(balance)} at last account refresh` : ''));
     const close = el('button', 'sp-close', '×');
     close.type = 'button';
     close.setAttribute('aria-label', 'Close');
@@ -2257,7 +2336,7 @@
     bar.setAttribute('role', 'img');
     bar.setAttribute('aria-label', `Allocated ${Model.formatPct(entry.total)}`);
     legs.forEach((l, i) => {
-      const seg = el('i', `sp-seg sp-c${i % 4}`);
+      const seg = el('i', `sp-seg sp-c${i % SPLIT_COLOR_COUNT}`);
       seg.style.width = `${Math.min(100, Model.shareOf(l.chip) || 0)}%`;
       bar.appendChild(seg);
     });
@@ -2278,7 +2357,7 @@
     legs.forEach((l, i) => {
       const legMapping = accountMappings[l.mappingIndex];
       const li = el('li', 'sp-leg' + (legMapping === splitPanel.anchor ? ' here' : ''));
-      li.appendChild(el('span', `sp-swatch sp-c${i % 4}`));
+      li.appendChild(el('span', `sp-swatch sp-c${i % SPLIT_COLOR_COUNT}`));
       const nameBox = el('span', 'sp-leg-name', legMapping.plName || 'No ProjectionLab account yet');
       const others = (legMapping.monarchAccounts || []).length - 1;
       const sub = legMapping === splitPanel.anchor ? 'This row' : (others > 0 ? `Summed with ${others} other source${others === 1 ? '' : 's'}` : '');
@@ -2325,21 +2404,13 @@
     if (targets.length) {
       const addWrap = el('div', 'sp-add');
       const label = el('label', 'sp-label', 'Split to');
-      label.htmlFor = 'split-to-select';
-      const select = el('select');
-      select.id = 'split-to-select';
-      select.appendChild(new Option('+ Add ProjectionLab account…', ''));
-      for (const a of targets) {
-        const existing = accountMappings.find((m) => m.plId === a.id);
-        select.appendChild(new Option(`${a.name}  ·  ${existing ? 'adds to existing row' : 'new row'}`, a.id));
-      }
-      select.onchange = () => splitTo(sourceId, entry, select.value);
+      label.htmlFor = 'split-to-input';
       addWrap.appendChild(label);
-      addWrap.appendChild(select);
+      addWrap.appendChild(buildSplitToPicker(sourceId, entry, targets));
       splitPanelEl.appendChild(addWrap);
     }
     if (splitPanel.flash) {
-      const flash = el('div', 'sp-flash', splitPanel.flash);
+      const flash = el('div', 'sp-flash load-status' + (splitPanel.flashFading ? ' load-status-fade-out' : ''), splitPanel.flash);
       flash.setAttribute('role', 'status');
       splitPanelEl.appendChild(flash);
     }
@@ -2382,19 +2453,117 @@
     positionSplitPanel();
   }
 
+  /**
+   * "Split to" picker: the same searchable dropdown as a row's ProjectionLab picker.
+   * The menu is position: fixed so the split panel's own scroll box doesn't clip it.
+   */
+  function buildSplitToPicker(sourceId, entry, targets) {
+    const widget = el('div', 'monarch-add-widget');
+    const input = el('input', 'add-dropdown-search');
+    input.type = 'text';
+    input.id = 'split-to-input';
+    input.placeholder = 'Select ProjectionLab account';
+    input.autocomplete = 'off';
+    const menu = el('div', 'monarch-add-panel');
+    menu.setAttribute('role', 'listbox');
+    menu.style.display = 'none';
+
+    function place() {
+      if (menu.style.display === 'none') return;
+      const r = input.getBoundingClientRect();
+      menu.style.left = `${r.left}px`;
+      menu.style.width = `${r.width}px`;
+      const h = menu.offsetHeight;
+      const below = window.innerHeight - r.bottom - 12;
+      menu.style.top = h > below && r.top - 12 > below ? `${r.top - 4 - h}px` : `${r.bottom + 4}px`;
+    }
+    function close() {
+      menu.style.display = 'none';
+      input.value = '';
+    }
+    function render() {
+      const query = input.value.trim();
+      const matches = targets.filter((a) => fuzzyMatch(query, a.name) || fuzzyMatch(query, getPLCategory(a)));
+      const { sortedCategories, byCategory } = groupPLByCategory(matches);
+      menu.innerHTML = '';
+      for (const cat of sortedCategories) {
+        menu.appendChild(el('div', 'monarch-add-panel-header', cat));
+        for (const a of byCategory.get(cat)) {
+          const opt = el('div', 'monarch-add-panel-option', a.name);
+          const existing = accountMappings.find((m) => m.plId === a.id);
+          opt.appendChild(el('span', 'opt-sub', existing ? 'Adds to existing row' : 'New row'));
+          opt.setAttribute('data-id', a.id);
+          opt.setAttribute('role', 'option');
+          opt.onclick = () => { close(); splitTo(sourceId, entry, a.id); };
+          menu.appendChild(opt);
+        }
+      }
+      menu.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
+      place();
+    }
+    input.onfocus = () => {
+      render();
+      setTimeout(() => {
+        document.addEventListener('click', function closeSplitToMenu(ev) {
+          if (!widget.contains(ev.target)) {
+            close();
+            document.removeEventListener('click', closeSplitToMenu);
+          }
+        });
+      }, 0);
+    };
+    input.oninput = render;
+    input.onkeydown = (e) => {
+      if (e.key === 'Escape') {
+        // Close just this menu, not the whole split panel.
+        e.stopPropagation();
+        close();
+        input.blur();
+      }
+    };
+    splitToMenuPlace = place;
+    widget.appendChild(input);
+    widget.appendChild(menu);
+    return widget;
+  }
+
+  /**
+   * Show a short confirmation in the split panel for 5s, then fade it out like the
+   * page's other status messages. Kept in splitPanel state because the panel re-renders.
+   */
+  function showSplitFlash(text) {
+    if (!splitPanel) return;
+    if (splitFlashTimers) splitFlashTimers.forEach(clearTimeout);
+    // A newer flash clears these timers, so any .sp-flash on screen when they fire is this one.
+    const panelState = splitPanel;
+    panelState.flash = text;
+    panelState.flashFading = false;
+    splitFlashTimers = [
+      setTimeout(() => {
+        panelState.flashFading = true;
+        const node = splitPanelEl.querySelector('.sp-flash');
+        if (node) node.classList.add('load-status-fade-out');
+      }, SPLIT_FLASH_SHOW_MS),
+      setTimeout(() => {
+        panelState.flash = '';
+        panelState.flashFading = false;
+        const node = splitPanelEl.querySelector('.sp-flash');
+        if (node) node.remove();
+        splitFlashTimers = null;
+      }, SPLIT_FLASH_SHOW_MS + LOAD_STATUS_FADE_MS),
+    ];
+  }
+
   async function splitTo(sourceId, entry, plId) {
     const acc = plAccounts.find((a) => a.id === plId);
     if (!acc) return;
     const remaining = Model.roundPct(Math.max(0, 100 - entry.total));
     const chip = Model.makeSplitChip(sourceId, entry.name, remaining);
     const existing = accountMappings.find((m) => m.plId === acc.id);
-    const zeroNote = remaining === 0
-      ? ' It starts at 0% because the split is already at 100%, and a 0% share never syncs. Lower another share to give it some.'
-      : '';
     if (existing) {
       existing.monarchAccounts = existing.monarchAccounts || [];
       existing.monarchAccounts.push(chip);
-      splitPanel.flash = `Added ${Model.formatPct(remaining)} to the existing ${acc.name} row.${zeroNote}`;
+      showSplitFlash(`Added ${Model.formatPct(remaining)} allocation to the existing ${acc.name} row.`);
     } else {
       // Reuse an untouched blank row if there is one, otherwise add a row.
       const blank = accountMappings.find((m) => !m.plId && !(m.monarchAccounts || []).length && !(m.monarchAccountsLoan || []).length);
@@ -2408,7 +2577,7 @@
         monarchAccountsLoan: [],
       });
       if (!blank) accountMappings.push(row);
-      splitPanel.flash = `Created a new row for ${acc.name} with ${Model.formatPct(remaining)}.${zeroNote}`;
+      showSplitFlash(`Created a new row for ${acc.name} with ${Model.formatPct(remaining)} allocation.`);
     }
     touchSplit(sourceId);
     flashPlId = acc.id;
@@ -2433,6 +2602,7 @@
     if (top + h > window.innerHeight - 12 && r.top - h - 8 > 12) top = r.top - h - 8;
     splitPanelEl.style.left = `${Math.max(16, left)}px`;
     splitPanelEl.style.top = `${Math.max(12, top)}px`;
+    if (splitToMenuPlace) splitToMenuPlace();
   }
 
   // mousedown (not click) so a table re-render can't detach the target first.
@@ -2456,6 +2626,7 @@
     }
     // Split state is computed once per render and read by every row.
     rowElByMapping = new WeakMap();
+    hideNotePop(); // its icon is about to be replaced
     currentAllocations = Model.computeAllocations(accountMappings);
     previewPlans = new Map(Model.planSync(accountMappings, cachedBalanceMap()).rows.map((p) => [p.mappingIndex, p]));
     const safe = [];

@@ -181,7 +181,7 @@ How the rules work:
 - **A 0% share never syncs**, so it can't overwrite a ProjectionLab balance with $0.
 - **Rounding:** shares are rounded to the cent so they always add back up to the exact Monarch balance.
 - **To stop splitting,** remove the shares with ×, then remove the last chip and add the account back without a split.
-- Each row shows a **Will sync ≈ $X** preview based on the balances from your last account refresh.
+- Each row shows an **Estimated sync $X** preview based on the balances from your last account refresh.
 
 The percentages don't update themselves. Employer matches usually land in the pre-tax part of a 401(k), so the real Roth/pre-tax ratio drifts over time. Check your plan's balance-by-source statement now and then and update the split.
 
