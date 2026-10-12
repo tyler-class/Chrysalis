@@ -188,9 +188,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           name: node.displayName || node.id,
           displayBalance: accountBalance(node),
           type: node.type?.name,
-          subtype: node.subtype?.name,
-          institution: node.institution?.name,
-          isAsset: node.isAsset,
+          // Monarch exposes these fields, but nothing in Chrysalis reads them and
+          // GET_ACCOUNTS_QUERY doesn't request them (so they were always undefined).
+          // Kept for future features; to use one, add it to the query too, e.g.
+          // `subtype { name }`, `institution { name }`, `isAsset`.
+          // subtype: node.subtype?.name,
+          // institution: node.institution?.name,
+          // isAsset: node.isAsset,
         }));
       return { success: true, accounts };
     }
