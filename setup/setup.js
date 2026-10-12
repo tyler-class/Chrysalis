@@ -130,19 +130,37 @@
     const monarchTotal = Model.allSourceIds(completeMappings).length;
     const chipMaps = document.getElementById('chip-maps');
     const chipMapsText = document.getElementById('chip-maps-text');
-    if (plCount > 0) {
-      chipMaps.classList.add('ok');
+    const unbalanced = unbalancedSplitNames();
+    chipMaps.classList.toggle('ok', plCount > 0 && !unbalanced.length);
+    chipMaps.classList.toggle('warn', plCount > 0 && unbalanced.length > 0);
+    if (plCount > 0 && unbalanced.length) {
+      chipMapsText.textContent = 'Account Mappings — Incomplete Split Percentages';
+      chipMaps.dataset.tip = `Split not at 100%: ${unbalanced.join(', ')}`;
+    } else if (plCount > 0) {
       chipMapsText.textContent = `Account Mappings — ${monarchTotal} Monarch → ${plCount} ProjectionLab`;
+      delete chipMaps.dataset.tip;
     } else {
-      chipMaps.classList.remove('ok');
       chipMapsText.textContent = 'Account Mappings — 0 mapped';
+      delete chipMaps.dataset.tip;
     }
+  }
+
+  /** Names of split Monarch accounts whose shares don't total 100% (under, over or missing a percentage). */
+  function unbalancedSplitNames() {
+    const names = [];
+    for (const entry of Model.computeAllocations(accountMappings).values()) {
+      if (entry.isSplit && Model.allocationState(entry) !== 'ok') names.push(entry.name);
+    }
+    return names;
   }
 
   function setStepCollapsed(stepId, collapsed) {
     const card = document.getElementById(stepId);
     const head = card && card.querySelector('.step-head');
     if (!card || !head) return;
+    // Programmatic changes are instant; stop any drawer animation in progress.
+    if (card._drawerAnim) { card._drawerAnim.cancel(); card._drawerAnim = null; }
+    card.classList.remove('collapsing');
     if (collapsed) {
       card.classList.add('collapsed');
       head.setAttribute('aria-expanded', 'false');
@@ -152,12 +170,57 @@
     }
   }
 
+  const DRAWER_OPEN_MS = 220;
+  const DRAWER_CLOSE_MS = 180;
+  const DRAWER_EASING = 'cubic-bezier(.25,.8,.25,1)';
+
+  /**
+   * Open or close a section card as a drawer by animating the card's height between its
+   * open and closed sizes. The `collapsed` class stays the source of truth: it's added at
+   * the end of a close (so the content stays visible while the card shrinks over it) and
+   * removed at the start of an open. `collapsing` turns the chevron right away.
+   * A click mid-animation reverses from wherever the card is.
+   */
+  function animateDrawer(card, collapse, setAria) {
+    setAria(collapse);
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const from = card.getBoundingClientRect().height;
+    if (card._drawerAnim) { card._drawerAnim.cancel(); card._drawerAnim = null; }
+    card.classList.remove('collapsing');
+    if (reduce || typeof card.animate !== 'function') {
+      card.classList.toggle('collapsed', collapse);
+      return;
+    }
+    // Measure the end height without painting the in-between state.
+    card.classList.toggle('collapsed', collapse);
+    const to = card.getBoundingClientRect().height;
+    if (collapse) {
+      card.classList.remove('collapsed');
+      card.classList.add('collapsing');
+    }
+    card.style.overflow = 'hidden';
+    const anim = card.animate(
+      [{ height: `${from}px` }, { height: `${to}px` }],
+      { duration: collapse ? DRAWER_CLOSE_MS : DRAWER_OPEN_MS, easing: DRAWER_EASING }
+    );
+    card._drawerAnim = anim;
+    anim.onfinish = () => {
+      card._drawerAnim = null;
+      card.style.overflow = '';
+      if (collapse) {
+        card.classList.remove('collapsing');
+        card.classList.add('collapsed');
+      }
+    };
+    anim.oncancel = () => { card.style.overflow = ''; };
+  }
+
   function toggleStepCollapsed(stepId) {
     const card = document.getElementById(stepId);
     if (!card) return;
-    const isCollapsed = card.classList.toggle('collapsed');
     const head = card.querySelector('.step-head');
-    if (head) head.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    const collapse = !(card.classList.contains('collapsed') || card.classList.contains('collapsing'));
+    animateDrawer(card, collapse, (c) => { if (head) head.setAttribute('aria-expanded', c ? 'false' : 'true'); });
   }
 
   function setupStepToggles() {
@@ -178,9 +241,9 @@
   function toggleAdvancedCollapsed() {
     const card = document.getElementById('advanced-card');
     if (!card) return;
-    card.classList.toggle('collapsed');
     const head = card.querySelector('.advanced-head');
-    if (head) head.setAttribute('aria-expanded', card.classList.contains('collapsed') ? 'false' : 'true');
+    const collapse = !(card.classList.contains('collapsed') || card.classList.contains('collapsing'));
+    animateDrawer(card, collapse, (c) => { if (head) head.setAttribute('aria-expanded', c ? 'false' : 'true'); });
   }
 
   function setupAdvancedSection() {
@@ -486,6 +549,28 @@
       card.classList.remove('complete');
       num.textContent = stepId === 'step1' ? '1' : stepId === 'step2' ? '2' : '3';
     }
+    if (stepId === 'step3') updateMapStepSplitWarning();
+    updateReadyPill();
+  }
+
+  /**
+   * A finished Map Accounts step shows an amber warning instead of the green check while
+   * any split Monarch account's shares don't total 100% (under, over or missing a percentage).
+   */
+  function updateMapStepSplitWarning() {
+    const card = document.getElementById('step3');
+    const num = card && card.querySelector('.step-num');
+    if (!num) return;
+    const unbalanced = unbalancedSplitNames();
+    const warn = unbalanced.length > 0;
+    card.classList.toggle('split-warn', warn);
+    if (warn && card.classList.contains('complete')) {
+      num.dataset.tip = `Split not at 100%: ${unbalanced.join(', ')}`;
+      num.setAttribute('aria-label', num.dataset.tip);
+    } else {
+      delete num.dataset.tip;
+      num.removeAttribute('aria-label');
+    }
     updateReadyPill();
   }
 
@@ -499,7 +584,9 @@
       const c = document.getElementById(id);
       return c && c.classList.contains('complete');
     });
-    pill.style.display = allComplete ? '' : 'none';
+    // Not ready while a split account's shares don't total 100%.
+    const splitWarn = document.getElementById('step3')?.classList.contains('split-warn');
+    pill.style.display = allComplete && !splitWarn ? '' : 'none';
   }
 
   function setupReadyPillHelp() {
@@ -1977,14 +2064,6 @@
     }, SPLIT_COMMIT_DELAY_MS);
   }
 
-  function allocationTip(entry, state) {
-    if (!entry) return '';
-    if (state === 'ok') return `${entry.name} is 100% allocated`;
-    if (state === 'under') return `${entry.name} is ${Model.formatPct(entry.total)} allocated`;
-    if (state === 'over') return `${entry.name} is over-allocated (${Model.formatPct(entry.total)})`;
-    return `${entry.name} has a share with no percentage`;
-  }
-
   /** Re-render every row (and the split panel), keeping focus and caret where they were. */
   function refreshMappingRows() {
     const active = document.activeElement;
@@ -2049,6 +2128,7 @@
     name.textContent = chip.name;
     tag.appendChild(name);
 
+    let noteIcon = null;
     if (Model.isSplitChip(chip)) {
       tag.classList.add('is-split');
       const entry = currentAllocations.get(sourceId);
@@ -2064,14 +2144,7 @@
       ));
       wrap.appendChild(document.createTextNode('%'));
       tag.appendChild(wrap);
-      const dot = document.createElement('span');
-      dot.className = 'alloc-dot' + (state === 'ok' ? '' : ' ' + state);
-      const tip = allocationTip(entry, state);
-      dot.title = tip;
-      dot.setAttribute('role', 'img');
-      dot.setAttribute('aria-label', tip);
-      tag.appendChild(dot);
-      const noteIcon = document.createElement('button');
+      noteIcon = document.createElement('button');
       noteIcon.type = 'button';
       noteIcon.className = 'note-ic';
       noteIcon.dataset.src = sourceId;
@@ -2082,7 +2155,6 @@
       noteIcon.addEventListener('focus', () => showNotePop(noteIcon, sourceId, mapping));
       noteIcon.addEventListener('blur', (e) => { if (!notePopEl.contains(e.relatedTarget)) scheduleHideNotePop(); });
       noteIcon.addEventListener('click', (e) => { e.stopPropagation(); showNotePop(noteIcon, sourceId, mapping); });
-      tag.appendChild(noteIcon);
     }
 
     const acc = monarchAccounts.find((a) => a.id === sourceId);
@@ -2116,6 +2188,8 @@
       };
       tag.appendChild(btn);
     }
+    // Note icon goes after the split button: [name] [%] [split] [note] [×]
+    if (noteIcon) tag.appendChild(noteIcon);
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -2170,14 +2244,7 @@
     notePopEl.appendChild(edit);
     icon.setAttribute('aria-describedby', notePopEl.id);
     notePopEl.hidden = false;
-    const r = icon.getBoundingClientRect();
-    const w = notePopEl.offsetWidth;
-    const h = notePopEl.offsetHeight;
-    const left = Math.min(Math.max(16, r.left - 10), window.innerWidth - w - 16);
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 12 && r.top - h - 6 > 12) top = r.top - h - 6;
-    notePopEl.style.left = `${Math.max(16, left)}px`;
-    notePopEl.style.top = `${Math.max(12, top)}px`;
+    placeFloating(notePopEl, icon.getBoundingClientRect(), 6, 10);
   }
 
   function hideNotePop() {
@@ -2195,6 +2262,40 @@
   notePopEl.addEventListener('mouseleave', scheduleHideNotePop);
   notePopEl.addEventListener('focusout', (e) => { if (!notePopEl.contains(e.relatedTarget)) scheduleHideNotePop(); });
   window.addEventListener('scroll', hideNotePop, true);
+
+  // ---------- hover tips (same look as the note popover, shown immediately) ----------
+  // Elements opt in with data-tip; an element without it shows nothing. Used instead of
+  // the native title tooltip, which is unstyled and waits a second or two to appear.
+
+  const tipEl = document.createElement('div');
+  tipEl.className = 'note-pop';
+  tipEl.setAttribute('role', 'tooltip');
+  tipEl.id = 'hover-tip';
+  tipEl.hidden = true;
+  document.body.appendChild(tipEl);
+
+  function showTip(anchor) {
+    const text = anchor.dataset.tip;
+    if (!text) { hideTip(); return; }
+    tipEl.innerHTML = '';
+    tipEl.appendChild(el('div', 'note-pop-text', text));
+    tipEl.hidden = false;
+    placeFloating(tipEl, anchor.getBoundingClientRect(), 6, 0);
+  }
+
+  function hideTip() {
+    tipEl.hidden = true;
+  }
+
+  function attachTip(node) {
+    if (!node) return;
+    node.addEventListener('mouseenter', () => showTip(node));
+    node.addEventListener('mouseleave', hideTip);
+  }
+
+  attachTip(document.getElementById('chip-maps'));
+  attachTip(document.querySelector('#step3 .step-num'));
+  window.addEventListener('scroll', hideTip, true);
 
   /** Under/over/missing-percentage messages for the split accounts in one row. */
   function renderRowSplitMessages(mapping, box) {
@@ -2473,9 +2574,17 @@
       const r = input.getBoundingClientRect();
       menu.style.left = `${r.left}px`;
       menu.style.width = `${r.width}px`;
+      menu.style.maxHeight = '';
       const h = menu.offsetHeight;
-      const below = window.innerHeight - r.bottom - 12;
-      menu.style.top = h > below && r.top - 12 > below ? `${r.top - 4 - h}px` : `${r.bottom + 4}px`;
+      const spaceBelow = window.innerHeight - r.bottom - 4 - FLOAT_EDGE_Y;
+      const spaceAbove = r.top - 4 - FLOAT_EDGE_Y;
+      // Open on whichever side fits (below first); if neither fits, use the roomier
+      // side and shrink the menu to it so it scrolls instead of running off the window.
+      const openAbove = h > spaceBelow && (h <= spaceAbove || spaceAbove > spaceBelow);
+      const room = Math.max(0, openAbove ? spaceAbove : spaceBelow);
+      if (h > room) menu.style.maxHeight = `${room}px`;
+      const shownH = Math.min(h, room);
+      menu.style.top = openAbove ? `${r.top - 4 - shownH}px` : `${r.bottom + 4}px`;
     }
     function close() {
       menu.style.display = 'none';
@@ -2586,23 +2695,48 @@
     await persistMappings();
   }
 
+  const FLOAT_EDGE_X = 16; // min gap between a floating element and the window's left/right edges
+  const FLOAT_EDGE_Y = 12; // ... and its top/bottom edges
+
+  /**
+   * Place a position: fixed element next to an anchor rect, always fully inside the window.
+   * Prefers below the anchor, then above it. If it fits on neither side (or the anchor has
+   * scrolled out of view), it's pinned inside the window as close to the anchor as possible.
+   * The element's max-height must leave room for FLOAT_EDGE_Y at the top and bottom.
+   */
+  function placeFloating(node, anchorRect, gap, nudgeLeft) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = node.offsetWidth;
+    const h = node.offsetHeight;
+    const maxTop = Math.max(FLOAT_EDGE_Y, vh - FLOAT_EDGE_Y - h);
+    const below = anchorRect.bottom + gap;
+    const above = anchorRect.top - gap - h;
+    let top;
+    if (below >= FLOAT_EDGE_Y && below <= maxTop) top = below;
+    else if (above >= FLOAT_EDGE_Y && above <= maxTop) top = above;
+    else top = Math.min(Math.max(below, FLOAT_EDGE_Y), maxTop);
+    const left = Math.min(Math.max(FLOAT_EDGE_X, anchorRect.left - nudgeLeft), Math.max(FLOAT_EDGE_X, vw - w - FLOAT_EDGE_X));
+    node.style.left = `${left}px`;
+    node.style.top = `${top}px`;
+  }
+
   function positionSplitPanel() {
     if (!splitPanel || splitPanelEl.hidden) return;
     const anchor = document.querySelector('.split-btn[aria-expanded="true"]');
-    const w = splitPanelEl.offsetWidth;
-    const h = splitPanelEl.offsetHeight;
-    if (!anchor) {
-      splitPanelEl.style.left = `${Math.max(16, (window.innerWidth - w) / 2)}px`;
-      splitPanelEl.style.top = '16px';
-      return;
+    if (anchor) {
+      placeFloating(splitPanelEl, anchor.getBoundingClientRect(), 8, 12);
+    } else {
+      splitPanelEl.style.left = `${Math.max(FLOAT_EDGE_X, (window.innerWidth - splitPanelEl.offsetWidth) / 2)}px`;
+      splitPanelEl.style.top = `${FLOAT_EDGE_Y}px`;
     }
-    const r = anchor.getBoundingClientRect();
-    const left = Math.min(Math.max(16, r.left - 12), window.innerWidth - w - 16);
-    let top = r.bottom + 8;
-    if (top + h > window.innerHeight - 12 && r.top - h - 8 > 12) top = r.top - h - 8;
-    splitPanelEl.style.left = `${Math.max(16, left)}px`;
-    splitPanelEl.style.top = `${Math.max(12, top)}px`;
     if (splitToMenuPlace) splitToMenuPlace();
+  }
+
+  // The panel's height changes without a re-render (fading message, resized note box),
+  // so re-place it whenever its size changes.
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => positionSplitPanel()).observe(splitPanelEl);
   }
 
   // mousedown (not click) so a table re-render can't detach the target first.
@@ -2655,6 +2789,9 @@
       allMappedMsg.style.display = noneLeft ? 'block' : 'none';
     }
     updateMapGate();
+    // Both reflect split totals, which change on every keystroke (before the save).
+    updateChips();
+    updateMapStepSplitWarning();
     renderSplitPanel();
   }
 

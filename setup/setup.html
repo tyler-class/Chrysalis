@@ -124,7 +124,7 @@
       color: var(--ink-2);
       text-decoration: none;
       padding: 6px 12px;
-      border-radius: 999px;
+      border-radius: var(--r-sm); /* squircle, like .btn and the step icons */
       transition: background 0.15s, color 0.15s;
     }
     .setup-page-link svg { width: 15px; height: 15px; display: block; }
@@ -175,6 +175,9 @@
       font-variant-numeric: tabular-nums;
     }
     .chip.ok { border-color: var(--good-line); background: var(--good-bg); color: var(--good); }
+    /* Mappings exist, but a split account's shares don't total 100%. */
+    .chip.warn { border-color: rgba(180,83,9,.35); background: #fdf3e3; color: var(--warn); cursor: help; }
+    .chip.warn .dot { background: var(--warn); }
     /* TODO(ui): the mapping-count chip text ("N Monarch → M ProjectionLab")
        is assembled as one string in setup.js (updateChips). To render the two
        figures as a Spline Mono stat with a highlighted background + green arrow
@@ -283,7 +286,8 @@
       width: 100%;
       height: 100%;
     }
-    .step-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .step-card.collapsed .step-chevron,
+    .step-card.collapsing .step-chevron { transform: rotate(-90deg); } /* collapsing: turns at the start of the close animation */
     .step-body {
       overflow: visible;
       padding-top: 16px;
@@ -315,6 +319,14 @@
       background-repeat: no-repeat;
       background-position: center;
       background-size: 20px 20px;
+    }
+    /* Map Accounts is complete but a split account's shares don't total 100%. */
+    .step-card.complete.split-warn { border-color: rgba(180,83,9,.35); }
+    .step-card.complete.split-warn .step-num {
+      background-color: var(--warn);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+      background-size: 19px 19px;
+      cursor: help;
     }
     .step-title { font-weight: 600; font-size: 17px; color: var(--ink); }
     label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
@@ -419,7 +431,16 @@
       border: 1px solid var(--line);
       border-radius: var(--r-md);
       background: var(--card);
+      /* Fixed layout: column widths come from the <col>s below, not from the content,
+         so adding chips (or the ∑ arrow) wraps inside the Monarch column instead of
+         shifting the arrow and ProjectionLab columns. The Monarch column gets the rest. */
+      table-layout: fixed;
+      min-width: 640px; /* below this the Monarch column gets too narrow for its chips */
     }
+    .map-table col.col-w-arrow { width: 48px; }
+    .map-table col.col-w-pl { width: 38%; } /* ≈334px at the page's full width; scales down on narrow windows */
+    .map-table col.col-w-saved { width: 36px; }
+    .map-table col.col-w-remove { width: 52px; }
     .map-table th {
       text-align: left;
       padding: 12px 14px;
@@ -443,8 +464,9 @@
     .map-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
     .map-table tr:last-child td { border-bottom: none; }
     .map-table td.col-remove { text-align: center; }
-    .map-table td.col-saved { text-align: center; vertical-align: middle; }
-    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; }
+    /* Sits beside the ProjectionLab picker (first line of the row), not the row's middle. */
+    .map-table td.col-saved { text-align: left; vertical-align: top; padding-left: 0; padding-right: 0; }
+    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 44px; } /* = ProjectionLab picker height */
     .map-cell { min-width: 200px; }
     .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
@@ -457,6 +479,8 @@
       white-space: nowrap;
     }
     .map-arrow[data-aggregate] { cursor: help; }
+    /* Centered in its fixed 48px column; no side padding so the ∑→ arrow fits. */
+    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; }
     .chips-row {
       display: flex;
       flex-wrap: wrap;
@@ -693,7 +717,8 @@
     }
     .advanced-card .step-num svg { display: block; }
     .advanced-head .step-chevron { margin-left: auto; color: var(--ink-3); }
-    .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .advanced-card.collapsed .step-chevron,
+    .advanced-card.collapsing .step-chevron { transform: rotate(-90deg); }
     .advanced-section-label {
       font-size: 15px;
       font-weight: 700;
@@ -879,15 +904,12 @@
     .chip-tag .pct-wrap { display: inline-flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid rgba(239,108,43,.35); }
     /* input.pct-input outranks the page-wide input[type="text"] sizing rule */
     input.pct-input {
-      width: 52px; max-width: 52px; min-height: 0; height: auto; font-family: 'Spline Sans Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600;
+      width: 39px; max-width: 39px; min-height: 0; height: auto; font-family: 'Spline Sans Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600;
       text-align: right; font-variant-numeric: tabular-nums; padding: 2px 5px; margin: 0;
       border: 1px solid rgba(239,108,43,.5); border-radius: 5px; background: var(--card); color: var(--monarch-pill-ink);
     }
     .pct-input:focus { outline: none; border-color: var(--monarch); box-shadow: 0 0 0 3px rgba(239,108,43,.18); }
     .pct-input.err { border-color: var(--red); color: var(--red); }
-    .alloc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--good); }
-    .alloc-dot.under { background: var(--warn); }
-    .alloc-dot.over, .alloc-dot.invalid { background: var(--red); }
     .note-ic {
       display: inline-flex; align-items: center; color: var(--monarch-pill-ink); opacity: .75; cursor: pointer;
       background: none; border: 0; padding: 2px; margin: -2px 0; border-radius: 4px;
@@ -904,10 +926,10 @@
     .note-pop[hidden] { display: none; }
     .note-pop-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; max-height: 200px; overflow-y: auto; }
     .note-pop-edit {
-      margin-top: 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--projlab-ink);
+      margin-top: 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink);
       background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
     }
-    .note-pop-edit:hover { color: var(--projlab); }
+    .note-pop-edit:hover { color: #000; }
     .split-btn {
       display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -3px 0; padding: 0;
       background: none; border: 1px solid transparent; border-radius: 6px; color: var(--monarch-pill-ink); cursor: pointer; opacity: .75;
@@ -1114,6 +1136,13 @@
         <li>To send part of an investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
       </ul>
       <table class="map-table">
+        <colgroup>
+          <col>
+          <col class="col-w-arrow">
+          <col class="col-w-pl">
+          <col class="col-w-saved">
+          <col class="col-w-remove">
+        </colgroup>
         <thead>
           <tr>
             <th>Monarch Accounts (select one or more)</th>
