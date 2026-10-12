@@ -10,6 +10,49 @@
     maximumFractionDigits: 0,
   });
 
+  const USD_CENTS = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+  function formatPct(n) {
+    return `${Math.round(Number(n) * 100) / 100}%`;
+  }
+
+  /**
+   * Per-source breakdown for rows that sum several accounts or use split shares.
+   * `r.sources` is recorded by the service worker for single-lane rows (since v1.2).
+   */
+  function renderSources(r) {
+    const sources = Array.isArray(r.sources) ? r.sources : [];
+    if (!sources.length || !(sources.length > 1 || sources.some((s) => s.pct != null))) return '';
+    const lines = sources.map((s) => {
+      const label = s.pct != null
+        ? `${formatPct(s.pct)} of ${s.name}${typeof s.balance === 'number' ? ` (${USD_CENTS.format(s.balance)})` : ''}`
+        : `${s.name} · whole account`;
+      let right;
+      if (s.status === 'ok') {
+        right = USD_CENTS.format(s.amount);
+        if (s.roundingCents) {
+          right = `<span class="src-round">${s.roundingCents > 0 ? 'rounded up' : 'rounded down'} ${Math.abs(s.roundingCents)}¢</span> ${right}`;
+        }
+      } else if (s.status === 'zero') right = 'not synced (0%)';
+      else if (s.status === 'missing') right = 'not found in Monarch';
+      else right = 'blocked';
+      return `<span>${escapeHtml(label)}</span><span class="r">${right}</span>`;
+    }).join('');
+    return `<div class="src-grid">${lines}</div>`;
+  }
+
+  function renderSplitSnapshot(entry) {
+    const splits = Array.isArray(entry.splits) ? entry.splits : [];
+    if (!splits.length) return '';
+    const items = splits.map((sp) => {
+      const shares = (sp.shares || []).map((x) => `${x.pct == null ? '?' : formatPct(x.pct)} → ${x.plName || x.plId}`).join(', ');
+      const state = sp.state === 'ok' ? '' : ` <span class="snap-${escapeHtml(sp.state)}">(${sp.state === 'under' ? 'under-allocated' : sp.state === 'over' ? 'over-allocated' : 'share missing'})</span>`;
+      const edited = sp.updatedAt ? `<div class="snap-meta">Split last edited ${escapeHtml(new Date(sp.updatedAt).toLocaleString())}</div>` : '';
+      return `<div class="snap-item"><strong>${escapeHtml(sp.name)}</strong>${typeof sp.balance === 'number' ? ` · ${USD_CENTS.format(sp.balance)}` : ''} · total ${formatPct(sp.totalPct)}${state}<div>${escapeHtml(shares)}</div>${edited}</div>`;
+    }).join('');
+    return `<div class="sync-details-section"><h3>Split settings at sync time</h3>${items}</div>`;
+  }
+
   function escapeHtml(s) {
     const div = document.createElement('div');
     div.textContent = s;
@@ -91,6 +134,7 @@
             <div class="result-body">
               <div class="result-pl-name">${escapeHtml(r.plName || '')}</div>
               <div class="result-detail">${escapeHtml(detail)}</div>
+              ${renderSources(r)}
               ${warning}
               ${error}
             </div>
@@ -140,6 +184,7 @@
         <div class="summary ${summaryClass(entry)}" style="margin-top:8px;font-weight:500">${escapeHtml(formatRunSummary(entry))}</div>
       </div>
       <div class="result-list">${rows || '<div class="empty">No result data for this run.</div>'}</div>
+      ${renderSplitSnapshot(entry)}
       ${detailsSection}
     `;
   }

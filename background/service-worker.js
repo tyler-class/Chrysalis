@@ -5,6 +5,9 @@
  */
 
 import '../shared/mapping-storage.js';
+import '../shared/mapping-model.js';
+
+const Model = globalThis.ChrysalisMappingModel;
 
 // ProjectionLab origins. By default Chrysalis only uses the standard app.*
 // instance. Early Access users opt in via the setup toggle
@@ -46,27 +49,7 @@ function buildPayload(plType, plNativeType, balance) {
   return { balance: num };
 }
 
-const PL_ASSET_WITH_LOAN_TYPES = new Set([
-  'land',
-  'car',
-  'vehicle',
-  'auto',
-  'real-estate',
-  'building',
-  'motorcycle',
-  'boat',
-  'jewelry',
-  'precious-metals',
-  'furniture',
-  'instrument',
-  'machinery',
-  'other',
-]);
-function isAssetWithLoanMapping(mapping) {
-  const t = (mapping.plNativeType || '').toLowerCase().replace(/_/g, '-');
-  for (const key of PL_ASSET_WITH_LOAN_TYPES) { if (t === key || t.indexOf(key) !== -1) return true; }
-  return false;
-}
+const isAssetWithLoanMapping = Model.isAssetWithLoanMapping;
 
 function buildPayloadAssetWithLoan(update) {
   const payload = {};
@@ -218,46 +201,46 @@ async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
   return Array.isArray(payload) ? payload : [];
 }
 
-/**
- * Normalize accountMappings to new schema: array of { plId, plName, monarchAccounts: [{ id, name }] }.
- * Migrates old flat schema (monarchId, monarchName at top level) by grouping by plId.
- */
-function normalizeMappings(raw) {
-  if (!Array.isArray(raw) || raw.length === 0) return [];
-  const hasNewSchema = raw.some(
-    (m) =>
-      Array.isArray(m.monarchAccounts) ||
-      Array.isArray(m.monarchAccountsLoan)
-  );
-  if (hasNewSchema) {
-    return raw.map((m) => ({
-      plId: m.plId,
-      plName: m.plName || m.plId,
-      plType: m.plType || 'asset',
-      plNativeType: m.plNativeType || '',
-      monarchAccounts: Array.isArray(m.monarchAccounts)
-        ? m.monarchAccounts.map((a) => ({ id: a.id, name: a.name || a.id }))
-        : [],
-      monarchAccountsLoan: Array.isArray(m.monarchAccountsLoan)
-        ? m.monarchAccountsLoan.map((a) => ({ id: a.id, name: a.name || a.id }))
-        : [],
-    }));
+const USD_CENTS = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+/** One Monarch source of a row, as stored in sync history. Amounts are in dollars. */
+function describeSourceForHistory(src) {
+  return {
+    monarchId: src.sourceId,
+    name: src.name,
+    pct: src.isSplit ? src.pct : null,
+    balance: typeof src.balance === 'number' ? src.balance : null,
+    amount: typeof src.amountCents === 'number' ? src.amountCents / 100 : null,
+    roundingCents: src.roundingCents || 0,
+    status: src.status,
+  };
+}
+
+function blockedSplitMessage(b) {
+  if (b.reason === 'invalid') {
+    return `${b.name} has a split share with no percentage, probably because an older version of Chrysalis re-saved your mappings. Re-enter its shares in Setup. Nothing was written to this account.`;
   }
-  const byPlId = new Map();
-  for (const m of raw) {
-    const plId = m.plId;
-    if (!plId) continue;
-    if (!byPlId.has(plId)) {
-      byPlId.set(plId, { plId, plName: m.plName || plId, plType: m.plType || 'asset', plNativeType: m.plNativeType || '', monarchAccounts: [], monarchAccountsLoan: [] });
-    }
-    const entry = byPlId.get(plId);
-    const mid = m.monarchId || m.monarchAccountId;
-    const mname = m.monarchName || m.monarchAccountName || mid;
-    if (mid && !entry.monarchAccounts.some((a) => a.id === mid)) {
-      entry.monarchAccounts.push({ id: mid, name: mname });
-    }
+  return `${b.name} is split ${Model.formatPct(b.totalPct)}. A Monarch account's shares can't total more than 100%. Fix the split in Setup. Nothing was written to this account.`;
+}
+
+/** Split settings as they were at sync time, so old runs stay explainable after edits. */
+function buildSplitSnapshot(allocations, balanceMap, splitMeta) {
+  const out = [];
+  for (const entry of allocations.values()) {
+    if (!entry.isSplit) continue;
+    out.push({
+      monarchId: entry.sourceId,
+      name: entry.name,
+      balance: entry.sourceId in balanceMap ? balanceMap[entry.sourceId] : null,
+      totalPct: entry.total,
+      state: Model.allocationState(entry),
+      updatedAt: (splitMeta[entry.sourceId] && splitMeta[entry.sourceId].updatedAt) || null,
+      shares: entry.legs
+        .filter((l) => !l.dual)
+        .map((l) => ({ plId: l.plId, plName: l.plName, pct: Model.shareOf(l.chip) })),
+    });
   }
-  return Array.from(byPlId.values());
+  return out.length ? out : null;
 }
 
 /**
@@ -267,6 +250,7 @@ function normalizeMappings(raw) {
 async function runSyncWithTabId(tabId) {
   let sync;
   let rawMappings;
+  let splitMeta = {};
   try {
     [sync, rawMappings] = await Promise.all([
       chrome.storage.sync.get(['plApiKey']),
@@ -278,8 +262,14 @@ async function runSyncWithTabId(tabId) {
       error: `Could not load account mappings: ${e.message || String(e)}`,
     };
   }
+  try {
+    splitMeta = await globalThis.ChrysalisMappingStorage.loadSplitMeta();
+  } catch (e) {
+    // Notes only feed the history snapshot; a failed read must not block the sync.
+    console.warn('[Chrysalis] Could not load split notes:', e);
+  }
     const plApiKey = sync.plApiKey;
-    const accountMappings = normalizeMappings(rawMappings || []);
+    const accountMappings = Model.normalizeMappings(rawMappings || []);
 
     if (!plApiKey || !plApiKey.trim()) {
       return { success: false, error: 'ProjectionLab API key not configured' };
@@ -288,14 +278,8 @@ async function runSyncWithTabId(tabId) {
       return { success: false, error: 'No account mappings configured' };
     }
 
-    const allMonarchIds = [
-      ...new Set(
-        accountMappings.flatMap((m) => [
-          ...(m.monarchAccounts || []).map((a) => a.id),
-          ...(m.monarchAccountsLoan || []).map((a) => a.id),
-        ])
-      ),
-    ];
+    // Split chips resolve to their underlying Monarch account id.
+    const allMonarchIds = Model.allSourceIds(accountMappings);
 
     let balanceResponse;
     try {
@@ -331,7 +315,14 @@ async function runSyncWithTabId(tabId) {
     let partialSuccess = false;
     const updatesToRun = [];
 
-    for (const mapping of accountMappings) {
+    // Single-lane rows (including percentage splits) are planned by the shared model:
+    // shares are allocated per Monarch account with cent-exact rounding.
+    const { rows: plannedRows, allocations } = Model.planSync(accountMappings, balanceMap);
+    const planByIndex = new Map(plannedRows.map((p) => [p.mappingIndex, p]));
+
+    for (const [mappingIndex, mapping] of accountMappings.entries()) {
+      // Rows without a ProjectionLab account are unfinished in Setup; skip them.
+      if (!mapping.plId) continue;
       const isDual = isAssetWithLoanMapping(mapping);
       const monarchAccounts = mapping.monarchAccounts || [];
       const monarchAccountsLoan = mapping.monarchAccountsLoan || [];
@@ -401,56 +392,61 @@ async function runSyncWithTabId(tabId) {
         continue;
       }
 
-      const found = [];
-      const missing = [];
-      let aggregatedBalance = 0;
-
-      for (const ma of monarchAccounts) {
-        if (ma.id in balanceMap) {
-          found.push(ma);
-          aggregatedBalance += balanceMap[ma.id];
-        } else {
-          missing.push(ma.name || ma.id);
-        }
-      }
-
-      if (found.length === 0) {
-        results.push({
-          plName: mapping.plName,
-          plId: mapping.plId,
-          plType: mapping.plType || 'asset',
-          plNativeType: mapping.plNativeType || '',
-          monarchAccounts: monarchAccounts.map((a) => a.name),
-          aggregatedBalance: 0,
-          isAggregated: monarchAccounts.length > 1,
-          success: false,
-          error: `No Monarch accounts found: ${missing.join(', ')}`,
-        });
-        continue;
-      }
-
-      let warning;
-      if (missing.length > 0) {
-        warning = `Some sources missing: ${missing.join(', ')}. Synced the rest.`;
-        partialSuccess = true;
-      }
-
-      const balance = Number(aggregatedBalance);
-      const plType = (mapping.plType || 'asset').toLowerCase();
-      const plNativeType = (mapping.plNativeType || '').toLowerCase();
-      if (balance !== null && !Number.isNaN(balance)) {
-        updatesToRun.push({ plId: mapping.plId, balance, plType, plNativeType });
-      }
-      results.push({
+      const plan = planByIndex.get(mappingIndex);
+      const base = {
         plName: mapping.plName,
         plId: mapping.plId,
         plType: mapping.plType || 'asset',
         plNativeType: mapping.plNativeType || '',
-        monarchAccounts: found.map((a) => a.name),
-        aggregatedBalance,
         isAggregated: monarchAccounts.length > 1,
+        sources: plan.sources.map(describeSourceForHistory),
+      };
+      const contributing = plan.sources.filter((src) => src.status === 'ok');
+
+      if (plan.blocked.length > 0) {
+        results.push({
+          ...base,
+          monarchAccounts: plan.sources.map((src) => src.label),
+          aggregatedBalance: 0,
+          success: false,
+          error: plan.blocked.map(blockedSplitMessage).join(' '),
+        });
+        continue;
+      }
+
+      if (contributing.length === 0) {
+        results.push({
+          ...base,
+          monarchAccounts: plan.sources.map((src) => src.label),
+          aggregatedBalance: 0,
+          success: false,
+          error: plan.missing.length
+            ? `No Monarch accounts found: ${plan.missing.join(', ')}`
+            : 'Every share in this row is 0%, so nothing was written. Give it a share above 0% in Setup to sync it.',
+        });
+        continue;
+      }
+
+      const notes = [];
+      if (plan.missing.length > 0) {
+        notes.push(`Some sources missing: ${plan.missing.join(', ')}. Synced the rest.`);
+        partialSuccess = true;
+      }
+      for (const name of plan.zero) notes.push(`${name} share is 0% and was skipped.`);
+      for (const u of plan.under) {
+        notes.push(`${u.name} is split ${Model.formatPct(u.totalPct)}. ${USD_CENTS.format(u.unallocatedCents / 100)} isn't synced to any account.`);
+      }
+
+      const balance = plan.amountCents / 100;
+      const plType = (mapping.plType || 'asset').toLowerCase();
+      const plNativeType = (mapping.plNativeType || '').toLowerCase();
+      updatesToRun.push({ plId: mapping.plId, balance, plType, plNativeType });
+      results.push({
+        ...base,
+        monarchAccounts: contributing.map((src) => src.label),
+        aggregatedBalance: balance,
         success: false,
-        warning,
+        warning: notes.length ? notes.join(' ') : undefined,
       });
     }
 
@@ -581,7 +577,9 @@ async function runSyncWithTabId(tabId) {
         warning: r.warning || null,
         valueSum: typeof r.valueSum === 'number' ? r.valueSum : null,
         loanSum: typeof r.loanSum === 'number' ? r.loanSum : null,
+        sources: Array.isArray(r.sources) ? r.sources : null,
       })),
+      splits: buildSplitSnapshot(allocations, balanceMap, splitMeta),
       debug: lastSyncDebug,
     }];
     const syncHistory =

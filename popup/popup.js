@@ -34,38 +34,7 @@
     return window.ChrysalisMappingStorage;
   }
 
-  function normalizeMappings(raw) {
-    if (!Array.isArray(raw) || raw.length === 0) return [];
-    const hasNewSchema = raw.some(
-      (m) =>
-        Array.isArray(m.monarchAccounts) ||
-        Array.isArray(m.monarchAccountsLoan)
-    );
-    if (hasNewSchema) {
-      return raw.map((m) => ({
-        plId: m.plId,
-        plName: m.plName || m.plId,
-        monarchAccounts: Array.isArray(m.monarchAccounts)
-          ? m.monarchAccounts.map((a) => ({ id: a.id, name: a.name || a.id }))
-          : [],
-      }));
-    }
-    const byPlId = new Map();
-    for (const m of raw) {
-      const plId = m.plId;
-      if (!plId) continue;
-      if (!byPlId.has(plId)) {
-        byPlId.set(plId, { plId, plName: m.plName || plId, monarchAccounts: [] });
-      }
-      const entry = byPlId.get(plId);
-      const mid = m.monarchId || m.monarchAccountId;
-      const mname = m.monarchName || m.monarchAccountName || mid;
-      if (mid && !entry.monarchAccounts.some((a) => a.id === mid)) {
-        entry.monarchAccounts.push({ id: mid, name: mname });
-      }
-    }
-    return Array.from(byPlId.values());
-  }
+  const Model = window.ChrysalisMappingModel;
 
   function relativeTime(ts) {
     if (!ts) return '';
@@ -451,10 +420,11 @@
       return;
     }
     const plApiKey = sync.plApiKey;
-    const mappings = normalizeMappings(rawMappings || []);
+    const mappings = Model.normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
     const plMappingCount = mappings.length;
-    const monarchTotal = mappings.reduce((sum, m) => sum + (m.monarchAccounts?.length || 0), 0);
+    // A split Monarch account appears in several rows; count it once.
+    const monarchTotal = Model.allSourceIds(mappings).length;
 
     if (!isConfigured) {
       renderNotSetUp();

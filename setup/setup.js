@@ -50,66 +50,13 @@
   let plAccounts = [];
   let plApiKey = '';
   let accountMappings = [];
+  // Per split Monarch account: { note, updatedAt }. Stored under accountSplitMeta.<id> in sync storage.
+  let splitMeta = {};
   let mappingStorageLoadError = null;
 
-  function normalizeMappings(raw) {
-    if (!Array.isArray(raw) || raw.length === 0) return [];
-    const out = [];
-    for (const m of raw) {
-      // If this looks like a new-schema row (our current format), keep it as-is
-      if (
-        (m && typeof m === 'object') &&
-        ('monarchAccounts' in m || 'monarchAccountsLoan' in m)
-      ) {
-        out.push({
-          plId: m.plId || '',
-          plName: m.plName || m.plId || '',
-          plType: m.plType || 'asset',
-          plNativeType: m.plNativeType || '',
-          monarchAccounts: Array.isArray(m.monarchAccounts)
-            ? m.monarchAccounts.map((a) => ({
-                id: a.id,
-                name: a.name || a.id,
-              }))
-            : [],
-          monarchAccountsLoan: Array.isArray(m.monarchAccountsLoan)
-            ? m.monarchAccountsLoan.map((a) => ({
-                id: a.id,
-                name: a.name || a.id,
-              }))
-            : [],
-        });
-        continue;
-      }
-      // Legacy/old-schema row – migrate
-      const plId = m.plId;
-      if (!plId) continue;
-      const existing = out.find((x) => x.plId === plId);
-      const target =
-        existing ||
-        (() => {
-          const created = {
-            plId,
-            plName: m.plName || plId,
-            plType: m.plType || 'asset',
-            plNativeType: m.plNativeType || '',
-            monarchAccounts: [],
-            monarchAccountsLoan: [],
-          };
-          out.push(created);
-          return created;
-        })();
-      const mid = m.monarchId || m.monarchAccountId;
-      const mname = m.monarchName || m.monarchAccountName || mid;
-      if (
-        mid &&
-        !target.monarchAccounts.some((a) => a.id === mid)
-      ) {
-        target.monarchAccounts.push({ id: mid, name: mname });
-      }
-    }
-    return out;
-  }
+  const Model = window.ChrysalisMappingModel;
+  const normalizeMappings = (raw) => Model.normalizeMappings(raw);
+  const USD_CENTS = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
   function getMappingStorage() {
     if (!window.ChrysalisMappingStorage) {
@@ -179,11 +126,8 @@
       return (m.monarchAccounts?.length || 0) > 0;
     });
     const plCount = completeMappings.length;
-    const monarchTotal = completeMappings.reduce((sum, m) => {
-      const value = m.monarchAccounts?.length || 0;
-      const loan = isAssetWithLoanMapping(m) ? (m.monarchAccountsLoan?.length || 0) : 0;
-      return sum + value + loan;
-    }, 0);
+    // A split Monarch account appears in several rows; count it once.
+    const monarchTotal = Model.allSourceIds(completeMappings).length;
     const chipMaps = document.getElementById('chip-maps');
     const chipMapsText = document.getElementById('chip-maps-text');
     if (plCount > 0) {
@@ -446,6 +390,8 @@
       const clearedMappings = [];
       if (!(await saveMappingsToStorage(clearedMappings))) return;
       accountMappings = clearedMappings;
+      splitMeta = {};
+      await persistSplitMeta();
       updateChips();
       renderMappingRows();
       updateStepComplete('step3', false);
@@ -462,6 +408,8 @@
       accountMappings = [];
       await chrome.storage.sync.set({ plApiKey: '', autoSyncEnabled: false });
       if (!(await saveMappingsToStorage(accountMappings))) return;
+      splitMeta = {};
+      await persistSplitMeta();
       await chrome.storage.local.clear();
       updateChips();
       updateStepComplete('step1', false);
@@ -474,7 +422,11 @@
     });
 
     document.getElementById('download-mappings').addEventListener('click', () => {
-      const data = JSON.stringify(accountMappings.filter((m) => m.plId && (m.monarchAccounts?.length || 0) > 0), null, 2);
+      // v2 backup: { format, version, mappings, splits } — splits carry each split account's note.
+      const backup = Model.buildExport(accountMappings, splitMeta, {
+        extensionVersion: chrome.runtime.getManifest().version,
+      });
+      const data = JSON.stringify(backup, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -495,20 +447,29 @@
       if (!file) return;
       try {
         const text = await file.text();
-        const raw = JSON.parse(text);
-        if (!Array.isArray(raw)) throw new Error('File must be a JSON array of mappings.');
-        const normalized = normalizeMappings(raw);
-        if (normalized.length === 0) throw new Error('No valid mappings in file.');
-        if (!(await saveMappingsToStorage(normalized))) {
+        const parsed = Model.parseImport(JSON.parse(text));
+        if (parsed.errors.length) throw new Error(parsed.errors.join('\n'));
+        if (!(await saveMappingsToStorage(Model.serializeMappings(parsed.mappings)))) {
           throw new Error('Could not save mappings. See the Map Accounts error for details.');
         }
-        accountMappings = normalized;
+        accountMappings = parsed.mappings;
+        splitMeta = parsed.splitMeta;
+        await persistSplitMeta();
         updateChips();
         renderMappingRows();
         updateStepComplete('step3', accountMappings.length > 0 && accountMappings.every((m) => m.plId && (m.monarchAccounts?.length || 0) > 0));
-        setFinalLoadStatus(document.getElementById('mappings-status-upload'), 'Mappings uploaded');
+        const splitCount = Object.keys(splitMeta).length;
+        const noteCount = Object.values(splitMeta).filter((v) => v.note).length;
+        const summary = `Mappings uploaded: ${accountMappings.length} ProjectionLab account${accountMappings.length === 1 ? '' : 's'}, ${splitCount} split account${splitCount === 1 ? '' : 's'}, ${noteCount} note${noteCount === 1 ? '' : 's'}.`;
+        const statusEl = document.getElementById('mappings-status-upload');
+        if (parsed.warnings.length) {
+          // Warnings stay on screen (no fade) so they can be read and acted on.
+          statusEl.textContent = `${summary} Check: ${parsed.warnings.join(' ')}`;
+        } else {
+          setFinalLoadStatus(statusEl, summary);
+        }
       } catch (err) {
-        alert('Upload failed: ' + (err.message || String(err)));
+        alert('Upload failed:\n' + (err.message || String(err)));
       }
       uploadInput.value = '';
     });
@@ -623,6 +584,11 @@
     } catch (e) {
       mappingStorageLoadError = e;
       console.error('[Chrysalis][setup] Failed to load account mappings:', e);
+    }
+    try {
+      splitMeta = Model.normalizeSplitMeta(await getMappingStorage().loadSplitMeta());
+    } catch (e) {
+      console.error('[Chrysalis][setup] Failed to load split notes:', e);
     }
     plApiKey = sync.plApiKey || '';
     accountMappings = normalizeMappings(rawMappings || []);
@@ -1241,35 +1207,15 @@
     const type = (plAccount.type || 'asset').toLowerCase();
     return PL_TYPE_TO_CATEGORY[type] || 'Real Assets';
   }
-  const PL_ASSET_WITH_LOAN_TYPES = new Set([
-    'land',
-    'car',
-    'vehicle',
-    'auto',
-    'real-estate',
-    'building',
-    'motorcycle',
-    'boat',
-    'jewelry',
-    'precious-metals',
-    'furniture',
-    'instrument',
-    'machinery',
-    'other',
-  ]);
-  function isAssetWithLoanMapping(mapping) {
-    const t = (mapping.plNativeType || '').toLowerCase().replace(/_/g, '-');
-    for (const key of PL_ASSET_WITH_LOAN_TYPES) { if (t === key || t.indexOf(key) !== -1) return true; }
-    return false;
+  const isAssetWithLoanMapping = Model.isAssetWithLoanMapping;
+
+  /** A row can hold split shares when its target is a ProjectionLab Investments account (or not chosen yet). */
+  function rowAcceptsSplit(mapping) {
+    if (!mapping || isAssetWithLoanMapping(mapping)) return false;
+    return !mapping.plId || String(mapping.plType || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE;
   }
-  function getMonarchIdsUsedInOtherRows(currentMapping) {
-    const used = new Set();
-    for (const m of accountMappings) {
-      if (m === currentMapping) continue;
-      for (const ma of m.monarchAccounts || []) used.add(ma.id);
-      for (const ma of m.monarchAccountsLoan || []) used.add(ma.id);
-    }
-    return used;
+  function rowHasSplit(mapping) {
+    return !!mapping && (mapping.monarchAccounts || []).some((c) => Model.isSplitChip(c));
   }
 
   function getPlIdsUsedInOtherRows(currentMapping) {
@@ -1283,8 +1229,12 @@
 
   function getFilteredGroupedPL(query, currentMapping) {
     const usedElsewhere = getPlIdsUsedInOtherRows(currentMapping || null);
+    // Rows holding split shares can only target ProjectionLab Investments accounts.
+    const splitOnly = rowHasSplit(currentMapping);
     const available = plAccounts.filter(
-      (a) => !usedElsewhere.has(a.id) || (currentMapping && currentMapping.plId === a.id)
+      (a) =>
+        (!usedElsewhere.has(a.id) || (currentMapping && currentMapping.plId === a.id)) &&
+        (!splitOnly || String(a.type || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE)
     );
     const filtered = !query
       ? available
@@ -1308,11 +1258,27 @@
     });
     return { sortedCategories, byCategory };
   }
-  function getUnselectedMonarchIds(selectedIds, currentMapping) {
-    const usedElsewhere = getMonarchIdsUsedInOtherRows(currentMapping || null);
-    return monarchAccounts
-      .filter((a) => !selectedIds.has(a.id) && !usedElsewhere.has(a.id))
-      .map((a) => ({ id: a.id, name: a.name, type: (a.type && String(a.type).trim()) || 'other_asset' }));
+  /**
+   * Monarch accounts that can be added to `currentMapping`.
+   * - Accounts used whole in another row stay hidden (same as before splits existed).
+   * - A split account with share left over is offered with `remaining` set, so it is
+   *   added as a split share pre-filled with that remainder — only in rows that accept splits.
+   * - Asset-with-loan lanes pass { allowSplit: false } and only see unused accounts.
+   */
+  function getUnselectedMonarchIds(selectedIds, currentMapping, opts) {
+    const allowSplit = (!opts || opts.allowSplit !== false) && rowAcceptsSplit(currentMapping);
+    const allocations = Model.computeAllocations(accountMappings.filter((m) => m !== currentMapping));
+    const out = [];
+    for (const a of monarchAccounts) {
+      if (selectedIds.has(a.id)) continue;
+      const base = { id: a.id, name: a.name, type: (a.type && String(a.type).trim()) || 'other_asset', remaining: null };
+      const entry = allocations.get(a.id);
+      if (!entry) { out.push(base); continue; }
+      if (!allowSplit || !entry.isSplit || entry.pctMissing || entry.legs.some((l) => l.dual)) continue;
+      const remaining = Model.roundPct(100 - entry.total);
+      if (remaining > 0) out.push({ ...base, remaining });
+    }
+    return out;
   }
   function displayNameForType(apiType) {
     return MONARCH_TYPE_DISPLAY_NAMES[apiType] || apiType;
@@ -1392,8 +1358,11 @@
     if (!Array.isArray(mapping.monarchAccountsLoan)) mapping.monarchAccountsLoan = [];
     const tbody = document.getElementById('map-tbody');
     const tr = document.createElement('tr');
+    rowElByMapping.set(mapping, tr);
+    if (flashPlId && mapping.plId === flashPlId) tr.classList.add('row-flash');
     if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
-    const selected = new Set((mapping.monarchAccounts || []).map((a) => a.id));
+    // Monarch account ids in this row (split chips resolve to their source account).
+    const selected = new Set((mapping.monarchAccounts || []).map((a) => Model.sourceIdOf(a)));
     const plId = mapping.plId || '';
     const plName = mapping.plName || '';
 
@@ -1411,7 +1380,14 @@
       const multi = total > 1;
       arrowSpan.setAttribute('data-aggregate', multi ? '1' : '0');
       arrowSpan.textContent = multi ? '∑→' : '→';
-      arrowSpan.title = multi ? (isDual ? 'Value and loan balances will be summed per field' : 'Balances will be summed') : '';
+      const labels = (mapping.monarchAccounts || []).map((c) => Model.chipLabel(c));
+      if (isDual) {
+        arrowSpan.title = multi ? 'Value and loan balances will be summed per field' : '';
+      } else if (multi) {
+        arrowSpan.title = `${mapping.plName || 'This account'} = ${labels.join(' + ')}`;
+      } else {
+        arrowSpan.title = rowHasSplit(mapping) ? labels[0] : '';
+      }
     }
 
     const cellMonarch = document.createElement('td');
@@ -1423,21 +1399,21 @@
     chipsRow.className = 'chips-row';
     const addMonarchRow = document.createElement('div');
     addMonarchRow.className = 'monarch-add-row';
+    const splitMsgBox = document.createElement('div');
+    splitMsgBox.className = 'split-msgs';
     function renderChips() {
       chipsRow.innerHTML = '';
-      (mapping.monarchAccounts || []).forEach((ma) => {
-        const tag = document.createElement('span');
-        tag.className = 'chip-tag';
-        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove" data-id="${escapeHtml(ma.id)}" aria-label="Remove">×</button>`;
-        tag.querySelector('.remove').onclick = async () => {
-          selected.delete(ma.id);
-          mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a.id !== ma.id);
-          renderChips();
-          renderDropdown();
+      const mi = accountMappings.indexOf(mapping);
+      (mapping.monarchAccounts || []).forEach((ma, ci) => {
+        chipsRow.appendChild(buildMonarchChip(mapping, ma, mi, ci, async () => {
+          selected.delete(Model.sourceIdOf(ma));
+          mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a !== ma);
+          if (Model.isSplitChip(ma)) touchSplit(Model.sourceIdOf(ma));
+          refreshMappingRows();
           await persistMappings();
-        };
-        chipsRow.appendChild(tag);
+        }));
       });
+      renderRowSplitMessages(mapping, splitMsgBox);
       addMonarchRow.innerHTML = '';
       const unselected = getUnselectedMonarchIds(selected, mapping);
       if (unselected.length) {
@@ -1454,16 +1430,19 @@
         panel.setAttribute('role', 'listbox');
         function addAccount(id) {
           const acc = monarchAccounts.find((a) => a.id === id);
-          if (acc) {
-            selected.add(id);
-            if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+          if (!acc) return;
+          const option = getUnselectedMonarchIds(selected, mapping).find((a) => a.id === id);
+          selected.add(id);
+          if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+          if (option && option.remaining != null) {
+            // Already split elsewhere: add a share pre-filled with what's left.
+            mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
+            touchSplit(acc.id);
+          } else {
             mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
-            input.value = '';
-            panel.style.display = 'none';
-            renderChips();
-            renderDropdown();
-            autoSaveMappingsIfRowComplete(mapping, tr);
           }
+          refreshMappingRows();
+          autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
         }
         function updatePanel() {
           const unselectedNow = getUnselectedMonarchIds(selected, mapping);
@@ -1479,6 +1458,12 @@
               const opt = document.createElement('div');
               opt.className = 'monarch-add-panel-option';
               opt.textContent = a.name;
+              if (a.remaining != null) {
+                const meta = document.createElement('span');
+                meta.className = 'opt-split-meta';
+                meta.textContent = `Split · ${Model.formatPct(a.remaining)} left`;
+                opt.appendChild(meta);
+              }
               opt.setAttribute('data-id', a.id);
               opt.setAttribute('role', 'option');
               opt.onclick = () => addAccount(a.id);
@@ -1513,53 +1498,11 @@
         addMonarchRow.appendChild(dropdownWrap);
       }
     }
-    function renderDropdown() {
-      const wrap = addMonarchRow.querySelector('span');
-      if (!wrap) return;
-      const widget = wrap.querySelector('.monarch-add-widget');
-      const unselected = getUnselectedMonarchIds(selected, mapping);
-      if (widget && unselected.length) {
-        const input = widget.querySelector('.add-dropdown-search');
-        const panel = widget.querySelector('.monarch-add-panel');
-        if (input && panel) {
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselected, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              opt.setAttribute('data-id', a.id);
-              opt.setAttribute('role', 'option');
-              opt.onclick = () => {
-                const acc = monarchAccounts.find((x) => x.id === a.id);
-                if (acc) {
-                  selected.add(a.id);
-                  if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
-                  mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
-                  input.value = '';
-                  panel.style.display = 'none';
-                  renderChips();
-                  renderDropdown();
-                  autoSaveMappingsIfRowComplete(mapping, tr);
-                }
-              };
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = 'none';
-        }
-      } else if (widget && !unselected.length) {
-        widget.remove();
-      }
-    }
+    // Kept for existing callers; renderChips() rebuilds the add-account dropdown itself.
+    function renderDropdown() {}
     renderChips();
     monarchNormalLayout.appendChild(chipsRow);
+    monarchNormalLayout.appendChild(splitMsgBox);
     monarchNormalLayout.appendChild(addMonarchRow);
 
     const monarchAssetWithLoanLayout = document.createElement('div');
@@ -1612,7 +1555,7 @@
         valueChipsRow.appendChild(tag);
       });
       valueAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping);
+      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
       if (unselected.length) {
         const wrap = document.createElement('span');
         const widget = document.createElement('div');
@@ -1638,7 +1581,7 @@
           }
         }
         function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping);
+          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
@@ -1685,7 +1628,7 @@
         loanChipsRow.appendChild(tag);
       });
       loanAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping);
+      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
       if (unselected.length) {
         const wrap = document.createElement('span');
         const widget = document.createElement('div');
@@ -1711,7 +1654,7 @@
           }
         }
         function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping);
+          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
@@ -1813,7 +1756,9 @@
               updatePLClearVisibility();
               plPanel.style.display = 'none';
               if (typeof updateMonarchLayout === 'function') updateMonarchLayout();
-              autoSaveMappingsIfRowComplete(mapping, tr);
+              // The target's type decides whether split icons show, so redraw the rows.
+              refreshMappingRows();
+              autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
             }
           };
           plPanel.appendChild(opt);
@@ -1875,6 +1820,7 @@
         updatePLInputLabel();
         updatePLClearVisibility();
         if (typeof updateMonarchLayout === 'function') updateMonarchLayout();
+        refreshMappingRows();
         await persistMappings();
       } else {
         plInput.value = '';
@@ -1908,6 +1854,8 @@
     plWidget.appendChild(plSearchWrap);
     plWidget.appendChild(plPanel);
     cellPL.appendChild(plWidget);
+    const preview = buildRowPreview(mapping);
+    if (preview) cellPL.appendChild(preview);
     tr.appendChild(cellPL);
 
     const cellSaved = document.createElement('td');
@@ -1957,12 +1905,559 @@
     if (content) content.style.display = canMap ? '' : 'none';
   }
 
+  // ---------------------------------------------------------------------------
+  // Percentage splits (investment accounts only).
+  //
+  // A split share is a chip { id: 'split:<monarchId>', sourceId, name, pct } in a
+  // normal row. The same Monarch account can appear in several rows; its shares
+  // across rows must total 100%. The split panel edits all of an account's shares
+  // in one place, adds shares to other ProjectionLab accounts ("Split to") and
+  // holds the user's note.
+  // ---------------------------------------------------------------------------
+
+  const SPLIT_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>';
+  const NOTE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  const SPLIT_COMMIT_DELAY_MS = 600;
+  const NOTE_SAVE_DELAY_MS = 700;
+
+  let rowElByMapping = new WeakMap();
+  let currentAllocations = new Map();
+  let previewPlans = new Map();
+  let flashPlId = null;
+  let splitPanel = null; // { sourceId, anchor: mapping, flash: string }
+  let splitCommitTimer = null;
+  const pendingSplitTouches = new Set();
+  let noteSaveTimer = null;
+
+  function cachedBalance(sourceId) {
+    const acc = monarchAccounts.find((a) => a.id === sourceId);
+    const n = acc ? Number(acc.displayBalance) : NaN;
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function cachedBalanceMap() {
+    const map = {};
+    for (const a of monarchAccounts) {
+      const n = Number(a.displayBalance);
+      if (Number.isFinite(n)) map[a.id] = n;
+    }
+    return map;
+  }
+
+  function touchSplit(sourceId) {
+    splitMeta[sourceId] = { note: (splitMeta[sourceId] && splitMeta[sourceId].note) || '', updatedAt: Date.now() };
+  }
+
+  async function persistSplitMeta() {
+    splitMeta = Model.pruneSplitMeta(splitMeta, accountMappings);
+    try {
+      await getMappingStorage().saveSplitMeta(splitMeta);
+    } catch (e) {
+      setSaveError(`Could not save split notes. ${e && e.message ? e.message : String(e)}`);
+      console.error('[Chrysalis][setup] Failed to save split notes:', e);
+    }
+  }
+
+  /** Persist after the user pauses typing a percentage (keeps sync-storage writes low). */
+  function scheduleSplitCommit(sourceId) {
+    pendingSplitTouches.add(sourceId);
+    if (splitCommitTimer) clearTimeout(splitCommitTimer);
+    splitCommitTimer = setTimeout(async () => {
+      splitCommitTimer = null;
+      for (const id of pendingSplitTouches) touchSplit(id);
+      pendingSplitTouches.clear();
+      await persistMappings();
+    }, SPLIT_COMMIT_DELAY_MS);
+  }
+
+  function allocationTip(entry, state) {
+    if (!entry) return '';
+    if (state === 'ok') return `${entry.name} is 100% allocated`;
+    if (state === 'under') return `${entry.name} is ${Model.formatPct(entry.total)} allocated`;
+    if (state === 'over') return `${entry.name} is over-allocated (${Model.formatPct(entry.total)})`;
+    return `${entry.name} has a share with no percentage`;
+  }
+
+  /** Re-render every row (and the split panel), keeping focus and caret where they were. */
+  function refreshMappingRows() {
+    const active = document.activeElement;
+    const activeId = active && active.id;
+    let selStart = null;
+    let selEnd = null;
+    try { selStart = active.selectionStart; selEnd = active.selectionEnd; } catch (_) {}
+    renderMappingRows();
+    if (activeId) {
+      const next = document.getElementById(activeId);
+      if (next && next !== active) {
+        next.focus();
+        try { if (selStart != null) next.setSelectionRange(selStart, selEnd); } catch (_) {}
+      }
+    }
+  }
+
+  function onShareInput(chip, raw, legsForAutofill) {
+    chip._raw = raw;
+    const pct = Model.parsePct(raw);
+    if (pct !== null) {
+      chip.pct = pct;
+      delete chip.pctMissing;
+      // Two shares: editing one fills in the other so they total 100%.
+      if (legsForAutofill && legsForAutofill.length === 2) {
+        const other = legsForAutofill.find((l) => l.chip !== chip);
+        if (other && Model.isSplitChip(other.chip)) {
+          other.chip.pct = Model.roundPct(Math.max(0, 100 - pct));
+          delete other.chip._raw;
+          delete other.chip.pctMissing;
+        }
+      }
+    }
+    refreshMappingRows();
+    scheduleSplitCommit(Model.sourceIdOf(chip));
+  }
+
+  function buildShareInput(chip, id, ariaLabel, state, legsForAutofill) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.autocomplete = 'off';
+    input.maxLength = 6;
+    input.id = id;
+    input.className = 'pct-input';
+    input.value = chip._raw != null ? chip._raw : (chip.pct == null ? '' : String(chip.pct));
+    const rawInvalid = chip._raw != null && Model.parsePct(chip._raw) === null;
+    if (rawInvalid || state === 'over' || state === 'invalid') input.classList.add('err');
+    if (rawInvalid) input.title = 'Enter a number from 0 to 100';
+    input.setAttribute('aria-label', ariaLabel);
+    input.addEventListener('input', () => onShareInput(chip, input.value, legsForAutofill));
+    input.addEventListener('blur', () => { delete chip._raw; });
+    return input;
+  }
+
+  function buildMonarchChip(mapping, chip, mi, ci, onRemove) {
+    const sourceId = Model.sourceIdOf(chip);
+    const tag = document.createElement('span');
+    tag.className = 'chip-tag';
+    tag.dataset.src = sourceId;
+    const name = document.createElement('span');
+    name.textContent = chip.name;
+    tag.appendChild(name);
+
+    if (Model.isSplitChip(chip)) {
+      tag.classList.add('is-split');
+      const entry = currentAllocations.get(sourceId);
+      const state = Model.allocationState(entry);
+      const wrap = document.createElement('span');
+      wrap.className = 'pct-wrap';
+      wrap.appendChild(buildShareInput(
+        chip,
+        `split-pct-${mi}-${ci}`,
+        `Share of ${chip.name} sent to ${mapping.plName || 'this ProjectionLab account'}, percent`,
+        state,
+        null
+      ));
+      wrap.appendChild(document.createTextNode('%'));
+      tag.appendChild(wrap);
+      const dot = document.createElement('span');
+      dot.className = 'alloc-dot' + (state === 'ok' ? '' : ' ' + state);
+      const tip = allocationTip(entry, state);
+      dot.title = tip;
+      dot.setAttribute('role', 'img');
+      dot.setAttribute('aria-label', tip);
+      tag.appendChild(dot);
+      const noteIcon = document.createElement('span');
+      noteIcon.className = 'note-ic';
+      noteIcon.dataset.src = sourceId;
+      noteIcon.setAttribute('role', 'img');
+      noteIcon.innerHTML = NOTE_ICON_SVG;
+      updateNoteIcon(noteIcon);
+      tag.appendChild(noteIcon);
+    }
+
+    const acc = monarchAccounts.find((a) => a.id === sourceId);
+    const canSplit = !isAssetWithLoanMapping(mapping) && (
+      Model.isSplitChip(chip) || (acc && Model.isSplittableMonarchType(acc.type) && rowAcceptsSplit(mapping))
+    );
+    if (canSplit) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'split-btn';
+      const isOpen = !!(splitPanel && splitPanel.sourceId === sourceId && splitPanel.anchor === mapping);
+      btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      btn.setAttribute('aria-haspopup', 'dialog');
+      btn.title = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
+      btn.setAttribute('aria-label', (Model.isSplitChip(chip) ? 'Edit split of ' : 'Split ') + chip.name);
+      btn.innerHTML = SPLIT_ICON_SVG;
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        if (isOpen) { closeSplitPanel(); return; }
+        if (!Model.isSplitChip(chip)) {
+          // Start a split: this row keeps 100% until the user adds shares elsewhere.
+          const idx = mapping.monarchAccounts.indexOf(chip);
+          if (idx !== -1) mapping.monarchAccounts[idx] = Model.makeSplitChip(sourceId, chip.name, 100);
+          touchSplit(sourceId);
+          await persistMappings();
+        }
+        openSplitPanel(sourceId, mapping);
+      };
+      tag.appendChild(btn);
+    }
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'remove';
+    remove.setAttribute('aria-label', `Remove ${chip.name}`);
+    remove.textContent = '×';
+    remove.onclick = onRemove;
+    tag.appendChild(remove);
+    return tag;
+  }
+
+  function updateNoteIcon(icon) {
+    const note = (splitMeta[icon.dataset.src] && splitMeta[icon.dataset.src].note) || '';
+    icon.hidden = !note;
+    icon.title = note;
+    icon.setAttribute('aria-label', note ? `Note: ${note}` : '');
+  }
+
+  function refreshNoteIcons() {
+    document.querySelectorAll('.note-ic[data-src]').forEach(updateNoteIcon);
+  }
+
+  /** Under/over/missing-percentage messages for the split accounts in one row. */
+  function renderRowSplitMessages(mapping, box) {
+    box.innerHTML = '';
+    const seen = new Set();
+    for (const chip of mapping.monarchAccounts || []) {
+      if (!Model.isSplitChip(chip)) continue;
+      const sourceId = Model.sourceIdOf(chip);
+      if (seen.has(sourceId)) continue;
+      seen.add(sourceId);
+      const entry = currentAllocations.get(sourceId);
+      const state = Model.allocationState(entry);
+      if (state === 'ok') continue;
+      const msg = document.createElement('div');
+      msg.className = 'split-msg ' + (state === 'under' ? 'under' : 'over');
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = state === 'under' ? '⚠' : '✕';
+      const text = document.createElement('span');
+      if (state === 'under') {
+        const bal = cachedBalance(sourceId);
+        const dollars = bal == null ? '' : ` (${USD_CENTS.format(Model.allocateCents(bal, [100 - entry.total])[0].cents / 100)})`;
+        text.textContent = `${entry.name} is ${Model.formatPct(entry.total)} allocated. ${Model.formatPct(100 - entry.total)}${dollars} won't sync anywhere. `;
+      } else if (state === 'over') {
+        text.textContent = `${entry.name} is ${Model.formatPct(entry.total)} allocated. Lower a share by ${Model.formatPct(entry.total - 100)}. Rows using this account won't sync until its shares total 100%. `;
+      } else {
+        text.textContent = `${entry.name} has a split share with no percentage. Enter its shares again so it can sync. `;
+      }
+      const fix = document.createElement('button');
+      fix.type = 'button';
+      fix.className = 'split-fix';
+      fix.textContent = 'Fix split';
+      fix.onclick = (e) => { e.stopPropagation(); openSplitPanel(sourceId, mapping); };
+      text.appendChild(fix);
+      msg.appendChild(icon);
+      msg.appendChild(text);
+      box.appendChild(msg);
+    }
+  }
+
+  /** "Will sync ≈ $X" line under a row's ProjectionLab account, from cached balances. */
+  function buildRowPreview(mapping) {
+    if (isAssetWithLoanMapping(mapping) || !mapping.plId || !(mapping.monarchAccounts || []).length) return null;
+    const plan = previewPlans.get(accountMappings.indexOf(mapping));
+    if (!plan) return null;
+    const el = document.createElement('div');
+    el.className = 'pl-preview';
+    if (plan.blocked.length) {
+      el.classList.add('blocked');
+      const b = plan.blocked[0];
+      el.textContent = b.reason === 'over'
+        ? `Won't sync: ${b.name} is over-allocated`
+        : `Won't sync: ${b.name} has a share with no percentage`;
+    } else if (!plan.write && plan.zero.length && !plan.missing.length) {
+      el.classList.add('blocked');
+      el.textContent = 'Won’t sync: share is 0%. Give it a share above 0 to sync.';
+    } else if (plan.write && plan.sources.every((src) => src.status !== 'missing')) {
+      el.textContent = `Will sync ≈ ${USD_CENTS.format(plan.amountCents / 100)} · from last account refresh`;
+    } else {
+      return null;
+    }
+    return el;
+  }
+
+  // ---------- split panel ----------
+
+  const splitPanelEl = document.createElement('div');
+  splitPanelEl.className = 'split-panel';
+  splitPanelEl.setAttribute('role', 'dialog');
+  splitPanelEl.setAttribute('aria-modal', 'false');
+  splitPanelEl.setAttribute('aria-labelledby', 'split-panel-title');
+  splitPanelEl.hidden = true;
+  document.body.appendChild(splitPanelEl);
+
+  function openSplitPanel(sourceId, anchorMapping) {
+    splitPanel = { sourceId, anchor: anchorMapping, flash: '' };
+    refreshMappingRows();
+  }
+
+  /** Closing never re-renders the table, so the click that closed the panel still lands. */
+  function closeSplitPanel() {
+    if (!splitPanel) return;
+    splitPanel = null;
+    splitPanelEl.hidden = true;
+    document.querySelectorAll('.split-btn[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    refreshNoteIcons();
+  }
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function renderSplitPanel() {
+    if (!splitPanel) { splitPanelEl.hidden = true; return; }
+    const { sourceId } = splitPanel;
+    const entry = Model.computeAllocations(accountMappings).get(sourceId);
+    const legs = entry ? entry.legs.filter((l) => !l.dual) : [];
+    if (!legs.length || !legs.some((l) => Model.isSplitChip(l.chip))) {
+      splitPanel = null;
+      splitPanelEl.hidden = true;
+      return;
+    }
+    if (!legs.some((l) => accountMappings[l.mappingIndex] === splitPanel.anchor)) {
+      splitPanel.anchor = accountMappings[legs[0].mappingIndex];
+    }
+    const state = Model.allocationState(entry);
+    const balance = cachedBalance(sourceId);
+    const amounts = balance != null && state !== 'over' && state !== 'invalid'
+      ? Model.allocateCents(balance, legs.map((l) => Model.shareOf(l.chip) || 0))
+      : null;
+    const meta = splitMeta[sourceId] || { note: '', updatedAt: null };
+
+    splitPanelEl.innerHTML = '';
+
+    const head = el('div', 'sp-head');
+    const titles = el('div');
+    const title = el('div', 'sp-title', `Split ${entry.name}`);
+    title.id = 'split-panel-title';
+    titles.appendChild(title);
+    titles.appendChild(el('div', 'sp-sub', balance != null ? `${USD_CENTS.format(balance)} at last account refresh · Investments` : 'Investments'));
+    const close = el('button', 'sp-close', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close');
+    close.onclick = closeSplitPanel;
+    head.appendChild(titles);
+    head.appendChild(close);
+    splitPanelEl.appendChild(head);
+
+    const bar = el('div', 'sp-bar' + (state === 'over' ? ' over' : ''));
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', `Allocated ${Model.formatPct(entry.total)}`);
+    legs.forEach((l, i) => {
+      const seg = el('i', `sp-seg sp-c${i % 4}`);
+      seg.style.width = `${Math.min(100, Model.shareOf(l.chip) || 0)}%`;
+      bar.appendChild(seg);
+    });
+    splitPanelEl.appendChild(bar);
+
+    const total = el('div', `sp-total ${state}`);
+    total.appendChild(el('span', null, `Total ${Model.formatPct(entry.total)}`));
+    let totalNote = '✓ Fully allocated';
+    if (state === 'under') {
+      const left = balance != null ? ` (${USD_CENTS.format(Model.allocateCents(balance, [100 - entry.total])[0].cents / 100)})` : '';
+      totalNote = `${Model.formatPct(100 - entry.total)}${left} unallocated`;
+    } else if (state === 'over') totalNote = `Over by ${Model.formatPct(entry.total - 100)}`;
+    else if (state === 'invalid') totalNote = 'A share has no percentage';
+    total.appendChild(el('span', null, totalNote));
+    splitPanelEl.appendChild(total);
+
+    const list = el('ul', 'sp-legs');
+    legs.forEach((l, i) => {
+      const legMapping = accountMappings[l.mappingIndex];
+      const li = el('li', 'sp-leg' + (legMapping === splitPanel.anchor ? ' here' : ''));
+      li.appendChild(el('span', `sp-swatch sp-c${i % 4}`));
+      const nameBox = el('span', 'sp-leg-name', legMapping.plName || 'No ProjectionLab account yet');
+      const others = (legMapping.monarchAccounts || []).length - 1;
+      const sub = legMapping === splitPanel.anchor ? 'This row' : (others > 0 ? `Summed with ${others} other source${others === 1 ? '' : 's'}` : '');
+      if (sub) nameBox.appendChild(el('small', null, sub));
+      li.appendChild(nameBox);
+      const pctWrap = el('span', 'sp-pct');
+      if (Model.isSplitChip(l.chip)) {
+        pctWrap.appendChild(buildShareInput(
+          l.chip,
+          `split-leg-${l.mappingIndex}-${l.chipIndex}`,
+          `Share to ${legMapping.plName || 'this row'}, percent`,
+          state,
+          legs.filter((x) => Model.isSplitChip(x.chip))
+        ));
+        pctWrap.appendChild(document.createTextNode('%'));
+      } else {
+        pctWrap.textContent = '100% (whole)';
+      }
+      li.appendChild(pctWrap);
+      const amount = amounts ? amounts[i].cents / 100 : null;
+      li.appendChild(el('span', 'sp-amt', amount == null ? '—' : USD_CENTS.format(amount)));
+      const rm = el('button', 'sp-rm', '×');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', `Remove share to ${legMapping.plName || 'this row'}`);
+      rm.onclick = async (e) => {
+        e.stopPropagation();
+        legMapping.monarchAccounts = legMapping.monarchAccounts.filter((c) => c !== l.chip);
+        touchSplit(sourceId);
+        refreshMappingRows();
+        await persistMappings();
+      };
+      li.appendChild(rm);
+      list.appendChild(li);
+    });
+    splitPanelEl.appendChild(list);
+
+    // "Split to": add this account to another ProjectionLab Investments account.
+    const usedPl = new Set(legs.map((l) => accountMappings[l.mappingIndex].plId).filter(Boolean));
+    const targets = plAccounts.filter((a) =>
+      String(a.type || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE &&
+      !usedPl.has(a.id) &&
+      !isAssetWithLoanMapping({ plNativeType: a.nativeType })
+    );
+    if (targets.length) {
+      const addWrap = el('div', 'sp-add');
+      const label = el('label', 'sp-label', 'Split to');
+      label.htmlFor = 'split-to-select';
+      const select = el('select');
+      select.id = 'split-to-select';
+      select.appendChild(new Option('+ Add ProjectionLab account…', ''));
+      for (const a of targets) {
+        const existing = accountMappings.find((m) => m.plId === a.id);
+        select.appendChild(new Option(`${a.name}  ·  ${existing ? 'adds to existing row' : 'new row'}`, a.id));
+      }
+      select.onchange = () => splitTo(sourceId, entry, select.value);
+      addWrap.appendChild(label);
+      addWrap.appendChild(select);
+      splitPanelEl.appendChild(addWrap);
+    }
+    if (splitPanel.flash) {
+      const flash = el('div', 'sp-flash', splitPanel.flash);
+      flash.setAttribute('role', 'status');
+      splitPanelEl.appendChild(flash);
+    }
+
+    const notes = el('div', 'sp-notes');
+    const noteLabel = el('label', 'sp-note-label', 'Note');
+    noteLabel.htmlFor = 'split-note';
+    const counter = el('span', 'sp-counter', `${(meta.note || '').length} / ${Model.NOTE_MAX}`);
+    if ((meta.note || '').length >= Model.NOTE_MAX - 50) counter.classList.add('near');
+    noteLabel.appendChild(counter);
+    const textarea = el('textarea');
+    textarea.id = 'split-note';
+    textarea.maxLength = Model.NOTE_MAX;
+    textarea.placeholder = 'Remind yourself what this split is. For example: where the percentages came from, or which part is Roth.';
+    textarea.value = meta.note || '';
+    textarea.addEventListener('input', () => {
+      const note = textarea.value.slice(0, Model.NOTE_MAX);
+      splitMeta[sourceId] = { note, updatedAt: (splitMeta[sourceId] && splitMeta[sourceId].updatedAt) || Date.now() };
+      counter.textContent = `${note.length} / ${Model.NOTE_MAX}`;
+      counter.classList.toggle('near', note.length >= Model.NOTE_MAX - 50);
+      refreshNoteIcons();
+      if (noteSaveTimer) clearTimeout(noteSaveTimer);
+      noteSaveTimer = setTimeout(() => { noteSaveTimer = null; persistSplitMeta(); }, NOTE_SAVE_DELAY_MS);
+    });
+    notes.appendChild(noteLabel);
+    notes.appendChild(textarea);
+    if (meta.updatedAt) {
+      notes.appendChild(el('div', 'sp-meta', `Split last edited ${new Date(meta.updatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`));
+    }
+    splitPanelEl.appendChild(notes);
+
+    const foot = el('div', 'sp-foot');
+    const done = el('button', 'sp-done', 'Done');
+    done.type = 'button';
+    done.onclick = closeSplitPanel;
+    foot.appendChild(done);
+    splitPanelEl.appendChild(foot);
+
+    splitPanelEl.hidden = false;
+    positionSplitPanel();
+  }
+
+  async function splitTo(sourceId, entry, plId) {
+    const acc = plAccounts.find((a) => a.id === plId);
+    if (!acc) return;
+    const remaining = Model.roundPct(Math.max(0, 100 - entry.total));
+    const chip = Model.makeSplitChip(sourceId, entry.name, remaining);
+    const existing = accountMappings.find((m) => m.plId === acc.id);
+    const zeroNote = remaining === 0
+      ? ' It starts at 0% because the split is already at 100%, and a 0% share never syncs. Lower another share to give it some.'
+      : '';
+    if (existing) {
+      existing.monarchAccounts = existing.monarchAccounts || [];
+      existing.monarchAccounts.push(chip);
+      splitPanel.flash = `Added ${Model.formatPct(remaining)} to the existing ${acc.name} row.${zeroNote}`;
+    } else {
+      // Reuse an untouched blank row if there is one, otherwise add a row.
+      const blank = accountMappings.find((m) => !m.plId && !(m.monarchAccounts || []).length && !(m.monarchAccountsLoan || []).length);
+      const row = blank || { monarchAccounts: [], monarchAccountsLoan: [] };
+      Object.assign(row, {
+        plId: acc.id,
+        plName: acc.name,
+        plType: acc.type || Model.SPLIT_TARGET_PL_TYPE,
+        plNativeType: acc.nativeType || '',
+        monarchAccounts: [chip],
+        monarchAccountsLoan: [],
+      });
+      if (!blank) accountMappings.push(row);
+      splitPanel.flash = `Created a new row for ${acc.name} with ${Model.formatPct(remaining)}.${zeroNote}`;
+    }
+    touchSplit(sourceId);
+    flashPlId = acc.id;
+    setTimeout(() => { flashPlId = null; }, 1900);
+    refreshMappingRows();
+    await persistMappings();
+  }
+
+  function positionSplitPanel() {
+    if (!splitPanel || splitPanelEl.hidden) return;
+    const anchor = document.querySelector('.split-btn[aria-expanded="true"]');
+    const w = splitPanelEl.offsetWidth;
+    const h = splitPanelEl.offsetHeight;
+    if (!anchor) {
+      splitPanelEl.style.left = `${Math.max(16, (window.innerWidth - w) / 2)}px`;
+      splitPanelEl.style.top = '16px';
+      return;
+    }
+    const r = anchor.getBoundingClientRect();
+    const left = Math.min(Math.max(16, r.left - 12), window.innerWidth - w - 16);
+    let top = r.bottom + 8;
+    if (top + h > window.innerHeight - 12 && r.top - h - 8 > 12) top = r.top - h - 8;
+    splitPanelEl.style.left = `${Math.max(16, left)}px`;
+    splitPanelEl.style.top = `${Math.max(12, top)}px`;
+  }
+
+  // mousedown (not click) so a table re-render can't detach the target first.
+  document.addEventListener('mousedown', (e) => {
+    if (!splitPanel) return;
+    if (splitPanelEl.contains(e.target)) return;
+    if (e.target.closest && (e.target.closest('.split-btn') || e.target.closest('.split-fix'))) return;
+    closeSplitPanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && splitPanel) closeSplitPanel();
+  });
+  window.addEventListener('resize', positionSplitPanel);
+  window.addEventListener('scroll', positionSplitPanel, true);
+
   function renderMappingRows() {
     const tbody = document.getElementById('map-tbody');
     tbody.innerHTML = '';
     if (accountMappings.length === 0) {
       accountMappings.push({ plId: '', plName: '', plType: '', plNativeType: '', monarchAccounts: [], monarchAccountsLoan: [] });
     }
+    // Split state is computed once per render and read by every row.
+    rowElByMapping = new WeakMap();
+    currentAllocations = Model.computeAllocations(accountMappings);
+    previewPlans = new Map(Model.planSync(accountMappings, cachedBalanceMap()).rows.map((p) => [p.mappingIndex, p]));
     const safe = [];
     accountMappings.forEach((m) => {
       try {
@@ -1989,6 +2484,7 @@
       allMappedMsg.style.display = noneLeft ? 'block' : 'none';
     }
     updateMapGate();
+    renderSplitPanel();
   }
 
   document.getElementById('add-row').onclick = () => {
@@ -1999,6 +2495,7 @@
   };
 
   function showRowSavedCheck(tr) {
+    if (!tr) return;
     const check = tr.querySelector('.row-saved-check');
     if (!check) return;
     if (tr._savedCheckTimeout) clearTimeout(tr._savedCheckTimeout);
@@ -2014,7 +2511,8 @@
       setSaveError(formatMappingLoadBlockedError());
       return false;
     }
-    if (!(await saveMappingsToStorage([...accountMappings]))) return false;
+    if (!(await saveMappingsToStorage(Model.serializeMappings(accountMappings)))) return false;
+    await persistSplitMeta();
     try {
       console.log('[Chrysalis][setup] persistMappings saving accountMappings:', accountMappings);
     } catch (_) {}

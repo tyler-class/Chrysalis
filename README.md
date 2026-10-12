@@ -22,11 +22,26 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.1.0 (2026-06-02)
+## 📣 Release Announcement — v1.2.0
 
-This version is a total visual refresh — a top-to-bottom redesign of Chrysalis's
-interface and a new logo. There are **no changes to core functionality**, but the tool
-should be more enjoyable to use and easier to navigate and understand with the new UI.
+**Split investment accounts across ProjectionLab accounts.** One Monarch investment
+account can now feed several ProjectionLab accounts by percentage. For example, you can send
+the pre-tax, Roth and after-tax parts of a 401(k) to separate ProjectionLab accounts so
+you can model retirement withdrawals differently for each. Split shares from different
+accounts can also be combined into one ProjectionLab account (e.g. both spouses'
+mega-backdoor money into one bucket). Each split can carry a note, splits are included
+in mapping backups, and Sync History shows exactly how every share was calculated.
+See [Splitting an investment account](#splitting-an-investment-account).
+
+<details>
+<summary><strong>Previous release — v1.1.0</strong></summary>
+
+<br>
+
+A total visual refresh: a top-to-bottom redesign of Chrysalis's interface and a new
+logo, with no changes to core functionality.
+
+</details>
 
 <details>
 <summary><strong>Recent release — v1.0.6</strong></summary>
@@ -147,6 +162,29 @@ When you select a ProjectionLab account that is one of these asset types, the ro
 
 <kbd><img src="screenshots/mapping-asset-and-loan.png" width="600"></kbd>
 
+### Splitting an investment account
+
+Any Monarch account under the **Investments** heading (brokerage, 401(k), IRA, Roth, HSA, 529…) can be split by percentage across several ProjectionLab **Investments** accounts. The common reason: a 401(k) holds pre-tax, Roth and after-tax money in one Monarch account, but you want each in its own ProjectionLab account so withdrawals and taxes are modeled correctly.
+
+1. Map the investment account to one ProjectionLab account as usual.
+2. Click the **split icon** on its chip. The split panel opens.
+3. Under **Split to**, pick another ProjectionLab account. If that account already has a row, the share is added to that row; otherwise a new row is created for it.
+4. Enter each share's percentage. With two shares, editing one fills in the other.
+5. Optionally write a **note** (up to 500 characters) to remind yourself where the percentages came from.
+
+How the rules work:
+
+- **Each ProjectionLab account still has one row**, and a row can still sum several Monarch accounts. A row can mix whole accounts and split shares (for example, 10% of a 401(k) plus a whole Roth IRA into one "Roth" account).
+- **Each Monarch account's shares must add up to 100% across all rows.** Percentages inside one row are never added to each other: a row with 15% of one 401(k) and 20% of another is fine.
+- **Over 100%:** the account turns red in Setup, and every row that uses it is skipped at sync. Chrysalis never writes a number built from an over-allocated split.
+- **Under 100%:** an amber warning shows the dollars that won't sync anywhere. The rest still syncs, with a warning.
+- **A 0% share never syncs**, so it can't overwrite a ProjectionLab balance with $0.
+- **Rounding:** shares are rounded to the cent so they always add back up to the exact Monarch balance.
+- **To stop splitting,** remove the shares with ×, then remove the last chip and add the account back without a split.
+- Each row shows a **Will sync ≈ $X** preview based on the balances from your last account refresh.
+
+The percentages don't update themselves. Employer matches usually land in the pre-tax part of a 401(k), so the real Roth/pre-tax ratio drifts over time. Check your plan's balance-by-source statement now and then and update the split.
+
 ### Sync Accounts
 
 Once setup is complete, syncing is a one-step process:
@@ -213,6 +251,8 @@ Click **View History** on the setup page, or the same link in the extension popu
 
 <kbd><img src="screenshots/sync-history-run-record.png" width="600"></kbd>
 
+For rows that sum several accounts or use split shares, each run record lists every source with its percentage, the Monarch balance it came from, the amount it contributed and any rounding. A **Split settings at sync time** section records every split as it was when the sync ran, so older runs still make sense after you change a split.
+
 ### Partial sync behavior
 
 If one of your mapped accounts is deleted or hidden in Monarch after you set up a mapping, Chrysalis will:
@@ -263,6 +303,8 @@ This button only clears your account mappings, but keeps your API key and cother
 
 This section has 2 buttons: one to download your current mappings as a JSON file, and another to upload mappings. This is useful if you need to migrate your Chrysalis settings from one computer to another. Or, if you are someone who clears your cache a lot if for software development purpuoses or what have you, then you might want to keep your account mappings saved to your local machine to re-upload when you're ready to sync again. The upload takes <1 second, and replaces any pre-existing mappings that may be there.
 
+Backups include your splits and their notes. Files downloaded from older versions of Chrysalis still upload. Older versions of Chrysalis can't read a backup made by v1.2.0 or later, and refuse it rather than loading part of it. On upload, Chrysalis rejects files with invalid percentages or a ProjectionLab account mapped twice, and lists any splits that don't add up to 100% so you can fix them.
+
 ---
 
 ## 🚑 Troubleshooting
@@ -298,6 +340,12 @@ Contributions are welcome, especially fixes when Monarch or ProjectionLab change
 **When Monarch breaks auth or account fetching**, the relevant file is `content-scripts/monarch.js`. Auth relies on the CSRF token read from the logged-in Monarch tab (a `MAIN`-world script) plus the existing session cookies; the auth and request-building logic is at the top of that file.
 
 **When ProjectionLab's Plugin API changes**, the relevant call is in `background/service-worker.js`.
+
+**Mapping rules, split math and backup files** live in `shared/mapping-model.js`, which the service worker, setup page and popup all share. Its tests run with Node's built-in test runner, no install needed:
+
+```
+node --test tests/*.test.js
+```
 
 When you [open an Issue](https://github.com/tyler-class/Chrysalis/issues), please include:
 

@@ -11,7 +11,9 @@
   const CHUNK_PREFIX = 'accountMappingsChunk.';
   const SYNC_ITEM_LIMIT_BYTES = 8192;
   const CHUNK_TARGET_BYTES = 7600;
-  const CURRENT_VERSION = 1;
+  // 2: mapping rows may contain split chips ({ id: 'split:<monarchId>', sourceId, pct }).
+  // Readers only rely on chunkCount, so older installs still load the chunks.
+  const CURRENT_VERSION = 2;
 
   function byteLength(str) {
     if (typeof TextEncoder !== 'undefined') {
@@ -147,11 +149,55 @@
     }
   }
 
+  /*
+   * Split metadata (the user's note and last-edited time for each split Monarch
+   * account) lives under one sync key per account: `accountSplitMeta.<monarchId>`.
+   * Notes are capped at 500 characters (≤ ~2KB even for emoji), so each item stays
+   * far below the 8KB per-item quota, and the total stays small next to the 100KB
+   * sync quota.
+   */
+  const SPLIT_META_PREFIX = 'accountSplitMeta.';
+
+  async function loadSplitMeta(storageArea) {
+    const syncStorage = getSyncStorage(storageArea);
+    const all = (await syncStorage.get(null)) || {};
+    const meta = {};
+    for (const [key, value] of Object.entries(all)) {
+      if (!key.startsWith(SPLIT_META_PREFIX) || !value || typeof value !== 'object') continue;
+      meta[key.slice(SPLIT_META_PREFIX.length)] = {
+        note: typeof value.note === 'string' ? value.note : '',
+        updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : null,
+      };
+    }
+    return meta;
+  }
+
+  /** Replace all split metadata with `meta` ({ [monarchId]: { note, updatedAt } }). */
+  async function saveSplitMeta(meta, storageArea) {
+    const syncStorage = getSyncStorage(storageArea);
+    const existing = (await syncStorage.get(null)) || {};
+    const values = {};
+    for (const [id, v] of Object.entries(meta || {})) {
+      const key = SPLIT_META_PREFIX + id;
+      const next = { note: (v && v.note) || '', updatedAt: (v && v.updatedAt) || null };
+      const prev = existing[key];
+      if (!prev || prev.note !== next.note || prev.updatedAt !== next.updatedAt) values[key] = next;
+    }
+    const stale = Object.keys(existing).filter(
+      (key) => key.startsWith(SPLIT_META_PREFIX) && !(key.slice(SPLIT_META_PREFIX.length) in (meta || {}))
+    );
+    if (Object.keys(values).length) await syncStorage.set(values);
+    if (stale.length) await syncStorage.remove(stale);
+  }
+
   global.ChrysalisMappingStorage = {
     LEGACY_KEY,
     META_KEY,
     CHUNK_PREFIX,
+    SPLIT_META_PREFIX,
     loadMappings,
     saveMappings,
+    loadSplitMeta,
+    saveSplitMeta,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
