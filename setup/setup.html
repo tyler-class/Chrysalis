@@ -488,6 +488,26 @@
     /* Centered in its fixed 48px column (no side padding so the ∑→ arrow fits). The 32px line
        box matches the ProjectionLab field, so the arrow lines up with the field's center. */
     .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; line-height: 32px; }
+    /* Swap rows (setup.js buildRowSwapButton): a round ⇅ centered on the corner where the divider
+       below a row meets the table's right border. Faint until either neighboring row is hovered. */
+    .map-table td.col-remove { position: relative; }
+    .row-swap {
+      /* -0.5px: the centers of the 1px divider and the table's 1px right border */
+      position: absolute; right: -0.5px; bottom: -0.5px; transform: translate(50%, 50%); z-index: 3;
+      display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+      border: 1px solid var(--line-strong); border-radius: 50%; background: var(--card); color: var(--ink-2);
+      cursor: pointer; transition: opacity 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      /* Hidden (and not clickable) until one of its two rows is hovered; faded then; full on hover. */
+      opacity: 0; pointer-events: none;
+    }
+    .row-swap svg { width: 12px; height: 12px; display: block; }
+    #map-tbody tr:hover .row-swap,
+    #map-tbody tr:has(+ tr:hover) .row-swap { opacity: 0.4; pointer-events: auto; }
+    /* As specific as the row-hover rules above (and later), so hovering the button itself wins. */
+    #map-tbody tr td .row-swap:hover,
+    #map-tbody tr td .row-swap:focus-visible { opacity: 1; pointer-events: auto; }
+    .row-swap:hover { color: var(--ink); border-color: var(--ink-3); box-shadow: var(--shadow-sm); }
+    .row-swap:focus-visible { outline: 2px solid var(--projlab); outline-offset: 2px; }
     .chips-row {
       display: flex;
       flex-wrap: wrap;

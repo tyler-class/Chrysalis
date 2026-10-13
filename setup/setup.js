@@ -2469,10 +2469,16 @@
       hideTip(); // the button is about to be removed with its row
       const idx = accountMappings.indexOf(mapping);
       if (idx !== -1) accountMappings.splice(idx, 1);
-      tr.remove();
+      refreshMappingRows(); // redraw so the swap buttons between rows stay correct
       await persistMappings();
     };
     cellRemove.appendChild(removeBtn);
+    // "Swap rows": sits where this row's bottom divider meets the table's right border and swaps
+    // this row with the one below.
+    const rowIndex = accountMappings.indexOf(mapping);
+    if (rowIndex !== -1 && rowIndex < accountMappings.length - 1) {
+      cellRemove.appendChild(buildRowSwapButton(rowIndex));
+    }
     tr.appendChild(cellRemove);
 
     tbody.appendChild(tr);
@@ -3602,9 +3608,61 @@
   document.getElementById('add-row').onclick = () => {
     const mapping = { plId: '', plName: '', plType: '', plNativeType: '', monarchAccounts: [], monarchAccountsLoan: [] };
     accountMappings.push(mapping);
-    const tbody = document.getElementById('map-tbody');
-    addMappingRow(mapping);
+    refreshMappingRows(); // redraw so the previous last row gets its swap button
   };
+
+  // ---------- swap rows ----------
+  // A ⇅ button on the divider between two rows (at the table's right border) swaps them. The row
+  // order is the saved order of the mappings, so it persists and is kept in backups.
+  const SWAP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 20V4M4 8l4-4 4 4M16 4v16M12 16l4 4 4-4"/></svg>';
+  const ROW_SWAP_MS = 200;
+
+  function rowLabel(m) {
+    return (m && m.plName) || 'unnamed';
+  }
+
+  function buildRowSwapButton(index) {
+    const above = accountMappings[index];
+    const below = accountMappings[index + 1];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'row-swap';
+    btn.id = `row-swap-${index}`;
+    btn.innerHTML = SWAP_ICON_SVG;
+    const label = `Swap the "${rowLabel(above)}" and "${rowLabel(below)}" rows`;
+    btn.setAttribute('aria-label', label);
+    btn.dataset.tip = label;
+    attachTip(btn, REMOVE_TIP_DELAY_MS);
+    btn.onclick = () => swapRows(index);
+    return btn;
+  }
+
+  async function swapRows(index) {
+    const a = accountMappings[index];
+    const b = accountMappings[index + 1];
+    if (!a || !b) return;
+    hideTip();
+    endMonarchPick();
+    closeSplitPanel();
+    const topBefore = new Map([a, b].map((m) => {
+      const tr = rowElByMapping.get(m);
+      return [m, tr ? tr.getBoundingClientRect().top : null];
+    }));
+    accountMappings[index] = b;
+    accountMappings[index + 1] = a;
+    refreshMappingRows(); // keeps focus on this swap button (same id), so a second click swaps back
+    // Slide the two rows from where they were to where they are now, then highlight them.
+    for (const m of [a, b]) {
+      const tr = rowElByMapping.get(m);
+      if (!tr) continue;
+      tr.classList.add('row-flash');
+      const from = topBefore.get(m);
+      if (from == null || reducedMotion() || typeof tr.animate !== 'function') continue;
+      const dy = from - tr.getBoundingClientRect().top;
+      if (dy) tr.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: ROW_SWAP_MS, easing: 'ease-out' });
+    }
+    await persistMappings();
+  }
 
   function showRowSavedCheck(tr) {
     if (!tr) return;
