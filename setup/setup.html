@@ -63,6 +63,9 @@
       --pl-purple: var(--projlab);
       --green: var(--good);
       --red: #dc2626;
+      /* split allocation warnings */
+      --warn: #b45309;
+      --red-bg: #fef2f2;
       --yellow: var(--monarch);
       --gradient: var(--primary);
     }
@@ -121,7 +124,7 @@
       color: var(--ink-2);
       text-decoration: none;
       padding: 6px 12px;
-      border-radius: 999px;
+      border-radius: var(--r-sm); /* squircle, like .btn and the step icons */
       transition: background 0.15s, color 0.15s;
     }
     .setup-page-link svg { width: 15px; height: 15px; display: block; }
@@ -172,6 +175,9 @@
       font-variant-numeric: tabular-nums;
     }
     .chip.ok { border-color: var(--good-line); background: var(--good-bg); color: var(--good); }
+    /* Mappings exist, but a split account's shares don't total 100%. */
+    .chip.warn { border-color: rgba(180,83,9,.35); background: #fdf3e3; color: var(--warn); cursor: help; }
+    .chip.warn .dot { background: var(--warn); }
     /* TODO(ui): the mapping-count chip text ("N Monarch → M ProjectionLab")
        is assembled as one string in setup.js (updateChips). To render the two
        figures as a Spline Mono stat with a highlighted background + green arrow
@@ -252,7 +258,12 @@
       box-shadow: var(--shadow-md);
       transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
-    .step-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    /* .hover-lift (setup.js) keeps a card lifted while the pointer is on a popover it owns. */
+    .step-card:hover,
+    .step-card.hover-lift { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    /* The hover transform gives each card its own stacking context, so a hovered card
+       later in the page would paint over step 3's dropdowns. Keep step 3 on top. */
+    #step3 { position: relative; z-index: 2; }
     .step-card.complete { border-color: var(--good-line); background: var(--card); }
     .step-head {
       display: flex;
@@ -277,7 +288,8 @@
       width: 100%;
       height: 100%;
     }
-    .step-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .step-card.collapsed .step-chevron,
+    .step-card.collapsing .step-chevron { transform: rotate(-90deg); } /* collapsing: turns at the start of the close animation */
     .step-body {
       overflow: visible;
       padding-top: 16px;
@@ -310,6 +322,14 @@
       background-position: center;
       background-size: 20px 20px;
     }
+    /* Map Accounts is complete but a split account's shares don't total 100%. */
+    .step-card.complete.split-warn { border-color: rgba(180,83,9,.35); }
+    .step-card.complete.split-warn .step-num {
+      background-color: var(--warn);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+      background-size: 19px 19px;
+      cursor: help;
+    }
     .step-title { font-weight: 600; font-size: 17px; color: var(--ink); }
     label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
     input[type="password"],
@@ -332,6 +352,8 @@
       box-shadow: 0 0 0 3px rgba(27,26,20,0.14);
     }
     .hint { font-size: 13px; color: var(--ink-2); margin-bottom: 14px; line-height: 1.5; }
+    .hint-list { margin-top: 0; padding-left: 20px; }
+    .hint-list li + li { margin-top: 4px; }
     .btn {
       font-family: inherit;
       font-size: 14px;
@@ -411,7 +433,16 @@
       border: 1px solid var(--line);
       border-radius: var(--r-md);
       background: var(--card);
+      /* Fixed layout: column widths come from the <col>s below, not from the content,
+         so adding chips (or the ∑ arrow) wraps inside the Monarch column instead of
+         shifting the arrow and ProjectionLab columns. The Monarch column gets the rest. */
+      table-layout: fixed;
+      min-width: 640px; /* below this the Monarch column gets too narrow for its chips */
     }
+    .map-table col.col-w-arrow { width: 48px; }
+    .map-table col.col-w-pl { width: 38%; } /* ≈334px at the page's full width; scales down on narrow windows */
+    .map-table col.col-w-saved { width: 36px; }
+    .map-table col.col-w-remove { width: 52px; }
     .map-table th {
       text-align: left;
       padding: 12px 14px;
@@ -435,8 +466,9 @@
     .map-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
     .map-table tr:last-child td { border-bottom: none; }
     .map-table td.col-remove { text-align: center; }
-    .map-table td.col-saved { text-align: center; vertical-align: middle; }
-    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; }
+    /* Sits beside the ProjectionLab picker (first line of the row), not the row's middle. */
+    .map-table td.col-saved { text-align: left; vertical-align: top; padding-left: 0; padding-right: 0; }
+    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 44px; } /* = ProjectionLab picker height */
     .map-cell { min-width: 200px; }
     .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
@@ -449,6 +481,8 @@
       white-space: nowrap;
     }
     .map-arrow[data-aggregate] { cursor: help; }
+    /* Centered in its fixed 48px column; no side padding so the ∑→ arrow fits. */
+    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; }
     .chips-row {
       display: flex;
       flex-wrap: wrap;
@@ -520,6 +554,7 @@
     }
     /* ProjectionLab destination control — blue data-source identity */
     .map-cell-pl .add-dropdown-search,
+    .sp-add .add-dropdown-search,
     select.map-select {
       background-color: var(--projlab-pill-bg);
       border: 1px solid var(--projlab);
@@ -527,8 +562,10 @@
       color: var(--projlab-pill-ink);
       font-weight: 600;
     }
-    .map-cell-pl .add-dropdown-search::placeholder { color: var(--projlab-pill-ink); opacity: 0.7; }
+    .map-cell-pl .add-dropdown-search::placeholder,
+    .sp-add .add-dropdown-search::placeholder { color: var(--projlab-pill-ink); opacity: 0.7; }
     .map-cell-pl .add-dropdown-search:focus,
+    .sp-add .add-dropdown-search:focus,
     select.map-select:focus {
       border-color: var(--projlab);
       box-shadow: 0 0 0 3px rgba(47,107,255,0.18);
@@ -682,7 +719,8 @@
     }
     .advanced-card .step-num svg { display: block; }
     .advanced-head .step-chevron { margin-left: auto; color: var(--ink-3); }
-    .advanced-card.collapsed .step-chevron { transform: rotate(-90deg); }
+    .advanced-card.collapsed .step-chevron,
+    .advanced-card.collapsing .step-chevron { transform: rotate(-90deg); }
     .advanced-section-label {
       font-size: 15px;
       font-weight: 700;
@@ -693,6 +731,8 @@
     .advanced-section-label:first-of-type { margin-top: 0; }
     .advanced-unlock-block { margin-bottom: 16px; display: flex; align-items: center; gap: 13px; }
     .advanced-lock-state { margin-left: auto; font-size: 115%; }
+    /* No bottom margin here, so the note centers on the lock instead of sitting 4px high. */
+    .advanced-unlock-block .advanced-note { margin: 0; }
     .advanced-output-wrap { margin-top: 12px; }
     .advanced-output-actions { margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
     .advanced-copy-msg { font-size: 12px; color: var(--green); }
@@ -730,6 +770,7 @@
     .advanced-card.advanced-locked .advanced-body select,
     .advanced-card.advanced-locked .advanced-body textarea,
     .advanced-card.advanced-locked .advanced-body button.advanced-btn,
+    .advanced-card.advanced-locked .advanced-body .styled-select-btn,
     .advanced-card.advanced-locked .advanced-body a.advanced-btn {
       pointer-events: none;
       opacity: 0.6;
@@ -803,6 +844,27 @@
       font-family: inherit;
     }
     .advanced-status { margin-left: 10px; font-size: 13px; color: var(--muted); }
+
+    /* Styled dropdown (setup.js enhanceSelect): a button + the page's own menu over a hidden <select>. */
+    .styled-select { display: inline-block; }
+    .styled-select > select.styled-select-native { display: none; }
+    .styled-select-btn {
+      display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
+      min-width: 150px; height: 34px; padding: 0 10px 0 12px; margin: 0;
+      font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text); text-align: left;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .styled-select-btn:hover:not(:disabled) { border-color: var(--line-strong); }
+    .styled-select-btn:focus-visible,
+    .styled-select-btn[aria-expanded="true"] { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,26,20,0.14); }
+    .styled-select-btn:disabled { background: var(--canvas-2); color: var(--ink-3); border-color: var(--line-strong); cursor: not-allowed; }
+    .styled-select-chevron { display: inline-flex; color: var(--ink-3); transition: transform 0.15s ease; }
+    .styled-select-chevron svg { width: 14px; height: 14px; display: block; }
+    .styled-select-btn[aria-expanded="true"] .styled-select-chevron { transform: rotate(180deg); }
+    .styled-select-menu { position: fixed; top: auto; left: auto; margin-top: 0; z-index: 2100; }
+    .styled-select-menu .monarch-add-panel-option.is-active { background: var(--surface); }
+    .styled-select-menu .monarch-add-panel-option.is-selected { font-weight: 600; }
     .advanced-body .btn { font-size: 13px; }
     .advanced-body .btn-secondary {
       background: var(--card);
@@ -863,9 +925,154 @@
       border-radius: var(--r-sm);
     }
 
+    /* ---------- Percentage splits ---------- */
+    .chip-tag.is-split { padding-right: 6px; }
+    .chip-tag .pct-wrap { display: inline-flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid rgba(239,108,43,.35); }
+    /* input.pct-input outranks the page-wide input[type="text"] sizing rule */
+    input.pct-input {
+      width: 50px; max-width: 50px; min-height: 0; /* fits 2-decimal values like 33.33 */ height: auto; font-family: 'Spline Sans Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600;
+      text-align: right; font-variant-numeric: tabular-nums; padding: 2px 5px; margin: 0;
+      border: 1px solid rgba(239,108,43,.5); border-radius: 5px; background: var(--card); color: var(--monarch-pill-ink);
+    }
+    .pct-input:focus { outline: none; border-color: var(--monarch); box-shadow: 0 0 0 3px rgba(239,108,43,.18); }
+    .pct-input.err { border-color: var(--red); color: var(--red); }
+    .note-ic {
+      display: inline-flex; align-items: center; color: var(--monarch-pill-ink); opacity: .75; cursor: pointer;
+      background: none; border: 0; padding: 2px; margin: -2px 0; border-radius: 4px;
+    }
+    .note-ic:hover { opacity: 1; }
+    .note-ic:focus-visible { outline: 2px solid var(--monarch); outline-offset: 1px; opacity: 1; }
+    .note-ic svg { width: 13px; height: 13px; display: block; }
+    .note-ic[hidden] { display: none; }
+    .note-pop {
+      position: fixed; z-index: 2050; width: max-content; max-width: 280px;
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-sm); box-shadow: var(--shadow-lg);
+      padding: 10px 12px; font-size: 12.5px; color: var(--ink);
+    }
+    .note-pop[hidden] { display: none; }
+    .note-pop-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; max-height: 200px; overflow-y: auto; }
+    .note-pop-edit {
+      margin-top: 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink);
+      background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .note-pop-edit:hover { color: #000; }
+    .split-btn {
+      display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -3px 0; padding: 0;
+      background: none; border: 1px solid transparent; border-radius: 6px; color: var(--monarch-pill-ink); cursor: pointer; opacity: .75;
+    }
+    .split-btn svg { width: 15px; height: 15px; display: block; }
+    .split-btn:hover, .split-btn[aria-expanded="true"] { opacity: 1; background: var(--card); border-color: rgba(239,108,43,.45); }
+    .split-btn:focus-visible { outline: 2px solid var(--monarch); outline-offset: 1px; opacity: 1; }
+    .split-msgs:empty { display: none; }
+    .split-msg { font-size: 12px; margin-top: 8px; line-height: 1.45; display: flex; gap: 6px; max-width: 52ch; }
+    .split-msg.under { color: var(--warn); }
+    .split-msg.over { color: var(--red); }
+    .split-fix { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+    /* Second line under a dropdown option's name, inside its hover fill. */
+    .opt-split-meta, .opt-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--warn); }
+    .opt-sub { font-weight: 500; color: var(--ink-3); }
+    .pl-preview { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .pl-preview.blocked { color: var(--red); }
+    tr.row-flash td { animation: row-flash 1.8s ease-out; }
+    @keyframes row-flash { from { background: var(--projlab-pill-bg); } to { background: transparent; } }
+
+    .split-panel {
+      position: fixed; z-index: 2000; width: 480px; max-width: calc(100vw - 32px); max-height: calc(100vh - 24px); overflow-y: auto;
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+      color: var(--ink-2); font-size: 13px; padding: 16px;
+    }
+    .split-panel[hidden] { display: none; }
+    .sp-head { display: flex; align-items: flex-start; gap: 10px; }
+    .sp-title { font-weight: 700; color: var(--ink); font-size: 14px; }
+    .sp-sub { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    .sp-close { margin-left: auto; background: none; border: 0; font-size: 18px; line-height: 1; color: var(--ink-3); cursor: pointer; border-radius: 6px; padding: 2px 6px; }
+    .sp-close:hover { background: var(--canvas-2); color: var(--ink); }
+    .sp-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; margin: 14px 0 4px; background: repeating-linear-gradient(135deg, var(--canvas-2) 0 5px, var(--line) 5px 7px); }
+    .sp-bar.over { box-shadow: 0 0 0 2px var(--red); }
+    .sp-seg { display: block; height: 100%; }
+    /* 12 distinct share colors, used in order (SPLIT_COLOR_COUNT in setup.js). */
+    .sp-c0 { background: var(--projlab); }  .sp-c1 { background: #7a9dff; }  .sp-c2 { background: #b7caff; }
+    .sp-c3 { background: #8b5cf6; }        .sp-c4 { background: #10a36f; }  .sp-c5 { background: #f08a3c; }
+    .sp-c6 { background: #e3b324; }        .sp-c7 { background: #e5579a; }  .sp-c8 { background: #9a6a43; }
+    .sp-c9 { background: #14a3a3; }        .sp-c10 { background: #c4b5fd; } .sp-c11 { background: #64748b; }
+    .sp-total { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .sp-total.ok { color: var(--good); } .sp-total.under { color: var(--warn); } .sp-total.over, .sp-total.invalid { color: var(--red); }
+    .sp-legs { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+    .sp-leg { display: grid; grid-template-columns: 10px minmax(0,1fr) auto auto 22px; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; background: var(--canvas); }
+    .sp-leg.here { background: var(--projlab-pill-bg); }
+    .sp-swatch { width: 10px; height: 10px; border-radius: 3px; }
+    .sp-leg-name { color: var(--projlab-pill-ink); font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-leg-name small { display: block; font-weight: 500; color: var(--ink-3); font-size: 11px; }
+    .sp-pct { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; }
+    .sp-pct input.pct-input { color: var(--ink); border-color: var(--line-strong); }
+    .sp-pct input.pct-input:focus { border-color: var(--projlab); box-shadow: 0 0 0 3px rgba(47,107,255,.16); }
+    .sp-calc-btn {
+      display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-left: 4px; padding: 0;
+      background: none; border: 1px solid transparent; border-radius: 6px; color: var(--ink-2); cursor: pointer;
+    }
+    .sp-calc-btn svg { width: 17px; height: 17px; display: block; }
+    .sp-calc-btn:hover, .sp-calc-btn[aria-expanded="true"] { background: var(--card); border-color: var(--line-strong); color: var(--ink); }
+    .sp-calc-btn:focus-visible { outline: 2px solid var(--projlab); outline-offset: 1px; }
+    .sp-amt { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
+    .sp-rm { background: none; border: 0; color: var(--ink-3); cursor: pointer; font-size: 16px; line-height: 1; border-radius: 4px; }
+    .sp-rm:hover { color: var(--red); }
+    .sp-add { margin-top: 10px; }
+    .sp-label { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+    .sp-add .monarch-add-widget { display: block; }
+    /* Fixed (positioned by setup.js) so the split panel's scroll box doesn't clip the menu. */
+    .sp-add .monarch-add-panel { position: fixed; top: auto; left: auto; margin-top: 0; min-width: 0; z-index: 2100; }
+    .sp-flash { margin-top: 10px; font-size: 12px; color: var(--good); font-weight: 600; }
+    .sp-notes { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .sp-note-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+    .sp-counter { font-weight: 500; color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .sp-counter.near { color: var(--warn); }
+    .sp-notes textarea { width: 100%; max-width: none; margin: 0; min-height: 76px; resize: vertical; font: inherit; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--card); }
+    .sp-notes textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,26,20,.12); }
+    .sp-meta { font-size: 11px; color: var(--ink-3); margin-top: 6px; }
+    .sp-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+    .sp-done { font: inherit; font-size: 12.5px; font-weight: 600; color: #fff; background: var(--primary); border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+    .sp-done:hover { background: var(--primary-hover); }
+    .sp-done:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Share calculator ($ amount → %), opened from a split share in the panel. */
+    .calc-pop {
+      position: fixed; z-index: 2100; width: 264px; max-width: calc(100vw - 32px);
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+      padding: 12px 14px; font-size: 12.5px; color: var(--ink-2);
+    }
+    .calc-pop[hidden] { display: none; }
+    .calc-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .calc-title { font-weight: 700; color: var(--ink); font-size: 13px; }
+    .calc-label { display: block; font-size: 11px; font-weight: 600; color: var(--ink-3); margin-bottom: 3px; }
+    .calc-balance { padding: 8px 10px; border-radius: 8px; background: var(--canvas); }
+    .calc-value { display: block; font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .calc-loading { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+    .calc-loading .spinner { width: 12px; height: 12px; }
+    .calc-error { color: var(--red); line-height: 1.4; }
+    .calc-link { margin-top: 4px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+    .calc-field { margin-top: 10px; }
+    .calc-input-wrap { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; background: var(--card); }
+    .calc-input-wrap:focus-within { border-color: var(--projlab); box-shadow: 0 0 0 3px rgba(47,107,255,.16); }
+    .calc-dollar { color: var(--ink-3); font-weight: 600; }
+    /* The wrapper draws the box and focus ring; the input itself must stay bare, so this
+       outranks the page-wide input[type="text"] and input:focus rules. */
+    .calc-pop input.calc-input,
+    .calc-pop input.calc-input:focus {
+      flex: 1; min-width: 0; width: auto; max-width: none; min-height: 0; margin: 0; padding: 7px 0;
+      border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent;
+      font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+    }
+    .calc-result { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
+    .calc-result .calc-label { margin: 0; }
+    .calc-pct { font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .calc-msg { min-height: 0; font-size: 11.5px; color: var(--warn); margin-top: 4px; }
+    .calc-msg:empty { display: none; }
+    .calc-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+
     @media (prefers-reduced-motion: reduce) {
       .step-card,
       .step-card:hover,
+      .step-card.hover-lift,
       .chip.ok .dot {
         animation: none !important;
         transition: none !important;
@@ -993,11 +1200,19 @@
         Before you can map accounts, save your ProjectionLab API key in Step 1, then load accounts from Monarch and ProjectionLab in Step 2.
       </div>
       <div id="map-content">
-      <p class="hint">
-        For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.
-        For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.
-      </p>
+      <ul class="hint hint-list">
+        <li>For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.</li>
+        <li>For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.</li>
+        <li>To send part of a cash or investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
+      </ul>
       <table class="map-table">
+        <colgroup>
+          <col>
+          <col class="col-w-arrow">
+          <col class="col-w-pl">
+          <col class="col-w-saved">
+          <col class="col-w-remove">
+        </colgroup>
         <thead>
           <tr>
             <th>Monarch Accounts (select one or more)</th>
@@ -1173,6 +1388,7 @@
     </div>
   </div>
   <script src="../shared/mapping-storage.js"></script>
+  <script src="../shared/mapping-model.js"></script>
   <script src="setup.js"></script>
 </body>
 </html>

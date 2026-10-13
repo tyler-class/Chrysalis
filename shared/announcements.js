@@ -33,6 +33,21 @@
   // ─── Edit this list to publish announcements ──────────────────────────────
   const ANNOUNCEMENTS = [
     {
+      id: 'v1.2.0',
+      title: 'New in v1.2.0 — split cash and investment accounts',
+      body:
+        '<strong>Send parts of one cash or investment account to different ProjectionLab ' +
+        'accounts.</strong> Split a 401(k) into its pre-tax, Roth and after-tax parts, ' +
+        'split one savings account across several goals, or combine split shares from two ' +
+        'accounts into one bucket. Click the split icon on any cash or investment account ' +
+        'in Setup → Map Accounts.<br><br>' +
+        'Each split can hold a note, and splits are included in mapping backups and ' +
+        'shown in Sync History.',
+      linkText: 'How splits work ↗',
+      linkUrl: 'https://github.com/tyler-class/Chrysalis#splitting-an-account',
+      expires: '2027-01-31', // disappears on 2027-01-31 (shows through 2027-01-30)
+    },
+    {
       id: 'v1.1.0',
       title: 'New release — v1.1.0',
       body:

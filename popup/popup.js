@@ -34,38 +34,7 @@
     return window.ChrysalisMappingStorage;
   }
 
-  function normalizeMappings(raw) {
-    if (!Array.isArray(raw) || raw.length === 0) return [];
-    const hasNewSchema = raw.some(
-      (m) =>
-        Array.isArray(m.monarchAccounts) ||
-        Array.isArray(m.monarchAccountsLoan)
-    );
-    if (hasNewSchema) {
-      return raw.map((m) => ({
-        plId: m.plId,
-        plName: m.plName || m.plId,
-        monarchAccounts: Array.isArray(m.monarchAccounts)
-          ? m.monarchAccounts.map((a) => ({ id: a.id, name: a.name || a.id }))
-          : [],
-      }));
-    }
-    const byPlId = new Map();
-    for (const m of raw) {
-      const plId = m.plId;
-      if (!plId) continue;
-      if (!byPlId.has(plId)) {
-        byPlId.set(plId, { plId, plName: m.plName || plId, monarchAccounts: [] });
-      }
-      const entry = byPlId.get(plId);
-      const mid = m.monarchId || m.monarchAccountId;
-      const mname = m.monarchName || m.monarchAccountName || mid;
-      if (mid && !entry.monarchAccounts.some((a) => a.id === mid)) {
-        entry.monarchAccounts.push({ id: mid, name: mname });
-      }
-    }
-    return Array.from(byPlId.values());
-  }
+  const Model = window.ChrysalisMappingModel;
 
   function relativeTime(ts) {
     if (!ts) return '';
@@ -111,6 +80,20 @@
         <p>Chrysalis could not load your saved account mappings.</p>
         <p style="margin-top:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">${escapeHtml(message)}</p>
         <button type="button" class="btn btn-primary" id="open-setup-cta">Open setup ↗</button>
+      </div>
+    `;
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+  }
+
+  /** A split account's shares don't total 100%: nothing can sync until it's fixed in Setup. */
+  function renderSplitsIncomplete(unbalanced) {
+    setStatus('yellow', 'Incomplete split percentages');
+    const items = unbalanced.map((u) => `<li>${escapeHtml(Model.describeUnbalancedSplit(u))}</li>`).join('');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>Sync is paused until every split account's shares add up to 100%.</p>
+        <ul class="split-problems">${items}</ul>
+        <button type="button" class="btn btn-primary" id="open-setup-cta">Fix in Setup ↗</button>
       </div>
     `;
     contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
@@ -451,13 +434,20 @@
       return;
     }
     const plApiKey = sync.plApiKey;
-    const mappings = normalizeMappings(rawMappings || []);
+    const mappings = Model.normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
     const plMappingCount = mappings.length;
-    const monarchTotal = mappings.reduce((sum, m) => sum + (m.monarchAccounts?.length || 0), 0);
+    // A split Monarch account appears in several rows; count it once.
+    const monarchTotal = Model.allSourceIds(mappings).length;
 
     if (!isConfigured) {
       renderNotSetUp();
+      return;
+    }
+
+    const unbalanced = Model.unbalancedSplits(mappings);
+    if (unbalanced.length) {
+      renderSplitsIncomplete(unbalanced);
       return;
     }
 
