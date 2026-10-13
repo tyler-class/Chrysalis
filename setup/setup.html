@@ -258,7 +258,9 @@
       box-shadow: var(--shadow-md);
       transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
-    .step-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    /* .hover-lift (setup.js) keeps a card lifted while the pointer is on a popover it owns. */
+    .step-card:hover,
+    .step-card.hover-lift { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
     /* The hover transform gives each card its own stacking context, so a hovered card
        later in the page would paint over step 3's dropdowns. Keep step 3 on top. */
     #step3 { position: relative; z-index: 2; }
@@ -729,6 +731,8 @@
     .advanced-section-label:first-of-type { margin-top: 0; }
     .advanced-unlock-block { margin-bottom: 16px; display: flex; align-items: center; gap: 13px; }
     .advanced-lock-state { margin-left: auto; font-size: 115%; }
+    /* No bottom margin here, so the note centers on the lock instead of sitting 4px high. */
+    .advanced-unlock-block .advanced-note { margin: 0; }
     .advanced-output-wrap { margin-top: 12px; }
     .advanced-output-actions { margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
     .advanced-copy-msg { font-size: 12px; color: var(--green); }
@@ -766,6 +770,7 @@
     .advanced-card.advanced-locked .advanced-body select,
     .advanced-card.advanced-locked .advanced-body textarea,
     .advanced-card.advanced-locked .advanced-body button.advanced-btn,
+    .advanced-card.advanced-locked .advanced-body .styled-select-btn,
     .advanced-card.advanced-locked .advanced-body a.advanced-btn {
       pointer-events: none;
       opacity: 0.6;
@@ -839,6 +844,27 @@
       font-family: inherit;
     }
     .advanced-status { margin-left: 10px; font-size: 13px; color: var(--muted); }
+
+    /* Styled dropdown (setup.js enhanceSelect): a button + the page's own menu over a hidden <select>. */
+    .styled-select { display: inline-block; }
+    .styled-select > select.styled-select-native { display: none; }
+    .styled-select-btn {
+      display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
+      min-width: 150px; height: 34px; padding: 0 10px 0 12px; margin: 0;
+      font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text); text-align: left;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .styled-select-btn:hover:not(:disabled) { border-color: var(--line-strong); }
+    .styled-select-btn:focus-visible,
+    .styled-select-btn[aria-expanded="true"] { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,26,20,0.14); }
+    .styled-select-btn:disabled { background: var(--canvas-2); color: var(--ink-3); border-color: var(--line-strong); cursor: not-allowed; }
+    .styled-select-chevron { display: inline-flex; color: var(--ink-3); transition: transform 0.15s ease; }
+    .styled-select-chevron svg { width: 14px; height: 14px; display: block; }
+    .styled-select-btn[aria-expanded="true"] .styled-select-chevron { transform: rotate(180deg); }
+    .styled-select-menu { position: fixed; top: auto; left: auto; margin-top: 0; z-index: 2100; }
+    .styled-select-menu .monarch-add-panel-option.is-active { background: var(--surface); }
+    .styled-select-menu .monarch-add-panel-option.is-selected { font-weight: 600; }
     .advanced-body .btn { font-size: 13px; }
     .advanced-body .btn-secondary {
       background: var(--card);
@@ -904,7 +930,7 @@
     .chip-tag .pct-wrap { display: inline-flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid rgba(239,108,43,.35); }
     /* input.pct-input outranks the page-wide input[type="text"] sizing rule */
     input.pct-input {
-      width: 39px; max-width: 39px; min-height: 0; height: auto; font-family: 'Spline Sans Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600;
+      width: 50px; max-width: 50px; min-height: 0; /* fits 2-decimal values like 33.33 */ height: auto; font-family: 'Spline Sans Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600;
       text-align: right; font-variant-numeric: tabular-nums; padding: 2px 5px; margin: 0;
       border: 1px solid rgba(239,108,43,.5); border-radius: 5px; background: var(--card); color: var(--monarch-pill-ink);
     }
@@ -951,7 +977,7 @@
     @keyframes row-flash { from { background: var(--projlab-pill-bg); } to { background: transparent; } }
 
     .split-panel {
-      position: fixed; z-index: 2000; width: 430px; max-width: calc(100vw - 32px); max-height: calc(100vh - 24px); overflow-y: auto;
+      position: fixed; z-index: 2000; width: 480px; max-width: calc(100vw - 32px); max-height: calc(100vh - 24px); overflow-y: auto;
       background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
       color: var(--ink-2); font-size: 13px; padding: 16px;
     }
@@ -980,6 +1006,13 @@
     .sp-pct { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; }
     .sp-pct input.pct-input { color: var(--ink); border-color: var(--line-strong); }
     .sp-pct input.pct-input:focus { border-color: var(--projlab); box-shadow: 0 0 0 3px rgba(47,107,255,.16); }
+    .sp-calc-btn {
+      display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-left: 4px; padding: 0;
+      background: none; border: 1px solid transparent; border-radius: 6px; color: var(--ink-2); cursor: pointer;
+    }
+    .sp-calc-btn svg { width: 17px; height: 17px; display: block; }
+    .sp-calc-btn:hover, .sp-calc-btn[aria-expanded="true"] { background: var(--card); border-color: var(--line-strong); color: var(--ink); }
+    .sp-calc-btn:focus-visible { outline: 2px solid var(--projlab); outline-offset: 1px; }
     .sp-amt { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
     .sp-rm { background: none; border: 0; color: var(--ink-3); cursor: pointer; font-size: 16px; line-height: 1; border-radius: 4px; }
     .sp-rm:hover { color: var(--red); }
@@ -999,10 +1032,47 @@
     .sp-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
     .sp-done { font: inherit; font-size: 12.5px; font-weight: 600; color: #fff; background: var(--primary); border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
     .sp-done:hover { background: var(--primary-hover); }
+    .sp-done:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Share calculator ($ amount → %), opened from a split share in the panel. */
+    .calc-pop {
+      position: fixed; z-index: 2100; width: 264px; max-width: calc(100vw - 32px);
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+      padding: 12px 14px; font-size: 12.5px; color: var(--ink-2);
+    }
+    .calc-pop[hidden] { display: none; }
+    .calc-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .calc-title { font-weight: 700; color: var(--ink); font-size: 13px; }
+    .calc-label { display: block; font-size: 11px; font-weight: 600; color: var(--ink-3); margin-bottom: 3px; }
+    .calc-balance { padding: 8px 10px; border-radius: 8px; background: var(--canvas); }
+    .calc-value { display: block; font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .calc-loading { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+    .calc-loading .spinner { width: 12px; height: 12px; }
+    .calc-error { color: var(--red); line-height: 1.4; }
+    .calc-link { margin-top: 4px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+    .calc-field { margin-top: 10px; }
+    .calc-input-wrap { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; background: var(--card); }
+    .calc-input-wrap:focus-within { border-color: var(--projlab); box-shadow: 0 0 0 3px rgba(47,107,255,.16); }
+    .calc-dollar { color: var(--ink-3); font-weight: 600; }
+    /* The wrapper draws the box and focus ring; the input itself must stay bare, so this
+       outranks the page-wide input[type="text"] and input:focus rules. */
+    .calc-pop input.calc-input,
+    .calc-pop input.calc-input:focus {
+      flex: 1; min-width: 0; width: auto; max-width: none; min-height: 0; margin: 0; padding: 7px 0;
+      border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent;
+      font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+    }
+    .calc-result { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
+    .calc-result .calc-label { margin: 0; }
+    .calc-pct { font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .calc-msg { min-height: 0; font-size: 11.5px; color: var(--warn); margin-top: 4px; }
+    .calc-msg:empty { display: none; }
+    .calc-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
 
     @media (prefers-reduced-motion: reduce) {
       .step-card,
       .step-card:hover,
+      .step-card.hover-lift,
       .chip.ok .dot {
         animation: none !important;
         transition: none !important;
@@ -1133,7 +1203,7 @@
       <ul class="hint hint-list">
         <li>For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.</li>
         <li>For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.</li>
-        <li>To send part of an investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
+        <li>To send part of a cash or investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
       </ul>
       <table class="map-table">
         <colgroup>

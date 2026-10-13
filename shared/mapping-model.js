@@ -6,7 +6,7 @@
  *   { plId, plName, plType, plNativeType, monarchAccounts: [chip], monarchAccountsLoan: [chip] }
  *
  * A chip is either a whole Monarch account:   { id, name }
- * or a split share of one (investment only):  { id: 'split:<monarchId>', sourceId: '<monarchId>', name, pct }
+ * or a split share of one (cash/investment):  { id: 'split:<monarchId>', sourceId: '<monarchId>', name, pct }
  *
  * Rules:
  *   - Each ProjectionLab account has at most one row.
@@ -24,8 +24,11 @@
   const NOTE_MAX = 500;
   const EXPORT_FORMAT = 'chrysalis-mappings';
   const EXPORT_VERSION = 2;
-  const SPLITTABLE_MONARCH_TYPES = ['brokerage'];
-  const SPLIT_TARGET_PL_TYPE = 'investment';
+  // Monarch account types that can be split: Investments (brokerage, 401(k), IRA, HSA, 529…)
+  // and Cash (depository: checking, savings, money market, CDs).
+  const SPLITTABLE_MONARCH_TYPES = ['brokerage', 'depository'];
+  // ProjectionLab account types a split share can go to: Savings and Investments.
+  const SPLIT_TARGET_PL_TYPES = ['savings', 'investment'];
   const EPS = 0.0001;
 
   const PL_ASSET_WITH_LOAN_TYPES = [
@@ -43,6 +46,10 @@
 
   function isSplittableMonarchType(type) {
     return SPLITTABLE_MONARCH_TYPES.includes(String(type || '').toLowerCase());
+  }
+
+  function isSplitTargetPlType(type) {
+    return SPLIT_TARGET_PL_TYPES.includes(String(type || '').toLowerCase());
   }
 
   function roundPct(n) {
@@ -350,6 +357,27 @@
     return errors;
   }
 
+  /**
+   * Split Monarch accounts whose shares don't total 100% (under, over, or a share with no
+   * percentage). While any exist, nothing syncs: Setup hides "Ready to Sync", the popup shows
+   * a warning instead of Sync Now, and the sync itself refuses to run.
+   * Returns [{ sourceId, name, total, state }].
+   */
+  function unbalancedSplits(mappings) {
+    const out = [];
+    for (const e of computeAllocations(mappings).values()) {
+      if (!e.isSplit) continue;
+      const state = allocationState(e);
+      if (state !== 'ok') out.push({ sourceId: e.sourceId, name: e.name, total: e.total, state });
+    }
+    return out;
+  }
+
+  /** One line per unbalanced split, e.g. "Fidelity 401(k) is at 90%". */
+  function describeUnbalancedSplit(u) {
+    return u.state === 'invalid' ? `${u.name} has a share with no percentage` : `${u.name} is at ${formatPct(u.total)}`;
+  }
+
   /** Allocation warnings (under/over/missing pct), one message per Monarch account. */
   function allocationWarnings(mappings) {
     const out = [];
@@ -471,10 +499,11 @@
     EXPORT_FORMAT,
     EXPORT_VERSION,
     SPLITTABLE_MONARCH_TYPES,
-    SPLIT_TARGET_PL_TYPE,
+    SPLIT_TARGET_PL_TYPES,
     PL_ASSET_WITH_LOAN_TYPES,
     isAssetWithLoanMapping,
     isSplittableMonarchType,
+    isSplitTargetPlType,
     roundPct,
     parsePct,
     formatPct,
@@ -493,6 +522,8 @@
     planSync,
     validateStructure,
     allocationWarnings,
+    unbalancedSplits,
+    describeUnbalancedSplit,
     normalizeSplitMeta,
     pruneSplitMeta,
     buildExport,

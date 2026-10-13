@@ -147,11 +147,7 @@
 
   /** Names of split Monarch accounts whose shares don't total 100% (under, over or missing a percentage). */
   function unbalancedSplitNames() {
-    const names = [];
-    for (const entry of Model.computeAllocations(accountMappings).values()) {
-      if (entry.isSplit && Model.allocationState(entry) !== 'ok') names.push(entry.name);
-    }
-    return names;
+    return Model.unbalancedSplits(accountMappings).map((u) => u.name);
   }
 
   function setStepCollapsed(stepId, collapsed) {
@@ -238,6 +234,174 @@
     });
   }
 
+  const SELECT_CHEVRON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+  /**
+   * Replace a native <select>'s look with the page's own dropdown (same menu as the account
+   * pickers). The <select> stays in the page, hidden, as the source of truth: existing code
+   * keeps reading and setting .value / .disabled and listening for "change".
+   */
+  function enhanceSelect(select) {
+    if (!select || select._styled) return;
+    select._styled = true;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'styled-select';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'styled-select-btn';
+    btn.id = `${select.id}-button`;
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    const valueEl = document.createElement('span');
+    valueEl.className = 'styled-select-value';
+    const chevron = document.createElement('span');
+    chevron.className = 'styled-select-chevron';
+    chevron.innerHTML = SELECT_CHEVRON_SVG;
+    btn.appendChild(valueEl);
+    btn.appendChild(chevron);
+
+    // The menu lives on <body>: the Advanced card clips overflow and its hover transform
+    // would otherwise anchor a fixed-position menu to the card.
+    const menu = document.createElement('div');
+    menu.className = 'monarch-add-panel styled-select-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.id = `${select.id}-menu`;
+    btn.setAttribute('aria-controls', menu.id);
+    menu.classList.add('floating-owned');
+    menu._ownerCard = wrap.closest('.step-card');
+    document.body.appendChild(menu);
+
+    const label = document.querySelector(`label[for="${select.id}"]`);
+    const labelText = label ? label.textContent.trim() : '';
+    if (label) label.htmlFor = btn.id;
+
+    select.parentNode.insertBefore(wrap, select);
+    wrap.appendChild(select);
+    wrap.appendChild(btn);
+    select.classList.add('styled-select-native');
+    select.tabIndex = -1;
+    select.setAttribute('aria-hidden', 'true');
+
+    let activeIndex = -1;
+
+    function sync() {
+      const opt = select.options[select.selectedIndex];
+      valueEl.textContent = opt ? opt.textContent : '';
+      btn.disabled = select.disabled;
+      btn.setAttribute('aria-label', `${labelText}${labelText ? ': ' : ''}${valueEl.textContent}`);
+      if (btn.disabled) close();
+    }
+
+    // Keep the button in step when code sets .value or .disabled, or adds options.
+    const valueDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(select, 'value', {
+      configurable: true,
+      get() { return valueDesc.get.call(this); },
+      set(v) { valueDesc.set.call(this, v); sync(); },
+    });
+    const disabledDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'disabled');
+    Object.defineProperty(select, 'disabled', {
+      configurable: true,
+      get() { return disabledDesc.get.call(this); },
+      set(v) { disabledDesc.set.call(this, v); sync(); },
+    });
+    new MutationObserver(sync).observe(select, { attributes: true, attributeFilter: ['disabled'], childList: true });
+
+    function isOpen() { return menu.style.display === 'block'; }
+
+    function place() {
+      const r = btn.getBoundingClientRect();
+      menu.style.left = `${r.left}px`;
+      menu.style.minWidth = `${r.width}px`;
+      menu.style.maxHeight = '';
+      const h = menu.offsetHeight;
+      const spaceBelow = window.innerHeight - r.bottom - 4 - FLOAT_EDGE_Y;
+      const spaceAbove = r.top - 4 - FLOAT_EDGE_Y;
+      const openAbove = h > spaceBelow && (h <= spaceAbove || spaceAbove > spaceBelow);
+      const room = Math.max(0, openAbove ? spaceAbove : spaceBelow);
+      if (h > room) menu.style.maxHeight = `${room}px`;
+      menu.style.top = openAbove ? `${r.top - 4 - Math.min(h, room)}px` : `${r.bottom + 4}px`;
+    }
+
+    function setActive(i) {
+      const opts = menu.querySelectorAll('.monarch-add-panel-option');
+      if (!opts.length) return;
+      activeIndex = (i + opts.length) % opts.length;
+      opts.forEach((o, k) => o.classList.toggle('is-active', k === activeIndex));
+      const cur = opts[activeIndex];
+      btn.setAttribute('aria-activedescendant', cur.id);
+      cur.scrollIntoView({ block: 'nearest' });
+    }
+
+    function open() {
+      if (btn.disabled || btn.closest('.advanced-locked')) return;
+      menu.innerHTML = '';
+      Array.from(select.options).forEach((o, i) => {
+        const opt = document.createElement('div');
+        opt.className = 'monarch-add-panel-option' + (o.selected ? ' is-selected' : '');
+        opt.id = `${menu.id}-${i}`;
+        opt.setAttribute('role', 'option');
+        opt.setAttribute('aria-selected', o.selected ? 'true' : 'false');
+        opt.textContent = o.textContent;
+        opt.onmousedown = (e) => e.preventDefault(); // keep focus on the button
+        opt.onclick = () => choose(o.value);
+        opt.onmousemove = () => { if (activeIndex !== i) setActive(i); };
+        menu.appendChild(opt);
+      });
+      menu.style.display = 'block';
+      btn.setAttribute('aria-expanded', 'true');
+      place();
+      setActive(Math.max(0, select.selectedIndex));
+    }
+
+    function close() {
+      if (!isOpen()) return;
+      menu.style.display = 'none';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.removeAttribute('aria-activedescendant');
+      activeIndex = -1;
+    }
+
+    function choose(value) {
+      close();
+      if (select.value !== value) {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      btn.focus();
+    }
+
+    btn.addEventListener('click', () => (isOpen() ? close() : open()));
+    btn.addEventListener('keydown', (e) => {
+      if (!isOpen()) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIndex - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+      else if (e.key === 'End') { e.preventDefault(); setActive(-1); }
+      else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const o = select.options[activeIndex];
+        if (o) choose(o.value);
+      } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === 'Tab') close();
+    });
+    btn.addEventListener('blur', close);
+    document.addEventListener('mousedown', (e) => {
+      if (isOpen() && !menu.contains(e.target) && !btn.contains(e.target)) close();
+    });
+    window.addEventListener('scroll', (e) => { if (isOpen() && !menu.contains(e.target)) close(); }, true);
+    window.addEventListener('resize', close);
+
+    sync();
+  }
+
   function toggleAdvancedCollapsed() {
     const card = document.getElementById('advanced-card');
     if (!card) return;
@@ -297,6 +461,8 @@
         e.stopPropagation();
         card.classList.toggle('advanced-locked');
         applyLockUi();
+        // applyLockUi enables every control on unlock; let sections with their own rules re-apply them.
+        card.dispatchEvent(new CustomEvent('advanced-lock-change'));
       });
     }
 
@@ -363,6 +529,7 @@
         autoSyncDayMonth.appendChild(opt);
       }
     }
+    [autoSyncFrequency, autoSyncDayWeek, autoSyncDayMonth].forEach(enhanceSelect);
 
     function updateAutoSyncVisibility() {
       const enabled = autoSyncCheckbox && autoSyncCheckbox.checked;
@@ -370,11 +537,13 @@
       // Visibility depends only on which frequency is selected
       if (dayWeekWrap) dayWeekWrap.style.display = freq === 'weekly' ? 'flex' : 'none';
       if (dayMonthWrap) dayMonthWrap.style.display = (freq === 'monthly' || freq === 'quarterly') ? 'flex' : 'none';
-      // Enabled state (including visual disabled styling) depends on master toggle
-      if (autoSyncFrequency) autoSyncFrequency.disabled = !enabled;
-      if (autoSyncDayWeek) autoSyncDayWeek.disabled = !enabled;
-      if (autoSyncDayMonth) autoSyncDayMonth.disabled = !enabled;
-      if (autoSyncTime) autoSyncTime.disabled = !enabled;
+      // Editable only when Advanced is unlocked AND "Run sync automatically" is on.
+      const locked = !!(card && card.classList.contains('advanced-locked'));
+      const editable = enabled && !locked;
+      if (autoSyncFrequency) autoSyncFrequency.disabled = !editable;
+      if (autoSyncDayWeek) autoSyncDayWeek.disabled = !editable;
+      if (autoSyncDayMonth) autoSyncDayMonth.disabled = !editable;
+      if (autoSyncTime) autoSyncTime.disabled = !editable;
     }
 
     function saveAutoSync() {
@@ -409,6 +578,8 @@
         }
       );
       autoSyncCheckbox.addEventListener('change', () => { saveAutoSync(); updateAutoSyncVisibility(); });
+      if (card) card.addEventListener('advanced-lock-change', updateAutoSyncVisibility);
+      updateAutoSyncVisibility(); // before stored settings load, so nothing is briefly editable
       autoSyncFrequency.addEventListener('change', () => { updateAutoSyncVisibility(); saveAutoSync(); });
       if (autoSyncDayWeek) autoSyncDayWeek.addEventListener('change', saveAutoSync);
       if (autoSyncDayMonth) autoSyncDayMonth.addEventListener('change', saveAutoSync);
@@ -1296,10 +1467,10 @@
   }
   const isAssetWithLoanMapping = Model.isAssetWithLoanMapping;
 
-  /** A row can hold split shares when its target is a ProjectionLab Investments account (or not chosen yet). */
+  /** A row can hold split shares when its target is a ProjectionLab Savings or Investments account (or not chosen yet). */
   function rowAcceptsSplit(mapping) {
     if (!mapping || isAssetWithLoanMapping(mapping)) return false;
-    return !mapping.plId || String(mapping.plType || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE;
+    return !mapping.plId || Model.isSplitTargetPlType(mapping.plType);
   }
   function rowHasSplit(mapping) {
     return !!mapping && (mapping.monarchAccounts || []).some((c) => Model.isSplitChip(c));
@@ -1316,12 +1487,12 @@
 
   function getFilteredGroupedPL(query, currentMapping) {
     const usedElsewhere = getPlIdsUsedInOtherRows(currentMapping || null);
-    // Rows holding split shares can only target ProjectionLab Investments accounts.
+    // Rows holding split shares can only target ProjectionLab Savings or Investments accounts.
     const splitOnly = rowHasSplit(currentMapping);
     const available = plAccounts.filter(
       (a) =>
         (!usedElsewhere.has(a.id) || (currentMapping && currentMapping.plId === a.id)) &&
-        (!splitOnly || String(a.type || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE)
+        (!splitOnly || Model.isSplitTargetPlType(a.type))
     );
     const filtered = !query
       ? available
@@ -1996,7 +2167,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Percentage splits (investment accounts only).
+  // Percentage splits (Monarch Cash and Investments accounts → ProjectionLab Savings or Investments).
   //
   // A split share is a chip { id: 'split:<monarchId>', sourceId, name, pct } in a
   // normal row. The same Monarch account can appear in several rows; its shares
@@ -2064,6 +2235,10 @@
     }, SPLIT_COMMIT_DELAY_MS);
   }
 
+  // True while refreshMappingRows() rebuilds the DOM. Chrome fires blur on a focused input
+  // when it's removed, and that blur must not be treated as the user leaving the field.
+  let renderingRows = false;
+
   /** Re-render every row (and the split panel), keeping focus and caret where they were. */
   function refreshMappingRows() {
     const active = document.activeElement;
@@ -2071,7 +2246,12 @@
     let selStart = null;
     let selEnd = null;
     try { selStart = active.selectionStart; selEnd = active.selectionEnd; } catch (_) {}
-    renderMappingRows();
+    renderingRows = true;
+    try {
+      renderMappingRows();
+    } finally {
+      renderingRows = false;
+    }
     if (activeId) {
       const next = document.getElementById(activeId);
       if (next && next !== active) {
@@ -2081,27 +2261,24 @@
     }
   }
 
-  function onShareInput(chip, raw, legsForAutofill) {
+  /**
+   * Editing a share only changes that share. Other shares are never adjusted here; a new
+   * share's starting value (what's left of 100%) is set once, when it's added.
+   */
+  function onShareInput(chip, raw) {
     chip._raw = raw;
-    const pct = Model.parsePct(raw);
+    // An empty field counts as 0% (it never syncs); it's saved as 0 rather than blank,
+    // because a blank percentage means "missing" and blocks the account at sync.
+    const pct = String(raw).trim() === '' ? 0 : Model.parsePct(raw);
     if (pct !== null) {
       chip.pct = pct;
       delete chip.pctMissing;
-      // Two shares: editing one fills in the other so they total 100%.
-      if (legsForAutofill && legsForAutofill.length === 2) {
-        const other = legsForAutofill.find((l) => l.chip !== chip);
-        if (other && Model.isSplitChip(other.chip)) {
-          other.chip.pct = Model.roundPct(Math.max(0, 100 - pct));
-          delete other.chip._raw;
-          delete other.chip.pctMissing;
-        }
-      }
     }
     refreshMappingRows();
     scheduleSplitCommit(Model.sourceIdOf(chip));
   }
 
-  function buildShareInput(chip, id, ariaLabel, state, legsForAutofill) {
+  function buildShareInput(chip, id, ariaLabel, state) {
     const input = document.createElement('input');
     input.type = 'text';
     input.inputMode = 'decimal';
@@ -2114,8 +2291,19 @@
     if (rawInvalid || state === 'over' || state === 'invalid') input.classList.add('err');
     if (rawInvalid) input.title = 'Enter a number from 0 to 100';
     input.setAttribute('aria-label', ariaLabel);
-    input.addEventListener('input', () => onShareInput(chip, input.value, legsForAutofill));
-    input.addEventListener('blur', () => { delete chip._raw; });
+    input.addEventListener('input', () => onShareInput(chip, input.value));
+    input.placeholder = '0';
+    // Only a real blur (the user left the field) tidies the value; see renderingRows.
+    input.addEventListener('blur', () => {
+      if (renderingRows || !input.isConnected) return;
+      delete chip._raw;
+      // Show the tidied value right away: "25." → "25", empty → "0", invalid → last valid value.
+      if (chip.pct != null && input.value !== String(chip.pct)) {
+        input.value = String(chip.pct);
+        // Clear only the "not a number" marking (it sets the title); over-100% stays red.
+        if (input.title) { input.classList.remove('err'); input.removeAttribute('title'); }
+      }
+    });
     return input;
   }
 
@@ -2139,8 +2327,7 @@
         chip,
         `split-pct-${mi}-${ci}`,
         `Share of ${chip.name} sent to ${mapping.plName || 'this ProjectionLab account'}, percent`,
-        state,
-        null
+        state
       ));
       wrap.appendChild(document.createTextNode('%'));
       tag.appendChild(wrap);
@@ -2219,6 +2406,8 @@
   notePopEl.setAttribute('role', 'tooltip');
   notePopEl.id = 'note-pop';
   notePopEl.hidden = true;
+  notePopEl.classList.add('floating-owned');
+  notePopEl._ownerCard = document.getElementById('step3');
   document.body.appendChild(notePopEl);
   let notePopHideTimer = null;
 
@@ -2272,11 +2461,13 @@
   tipEl.setAttribute('role', 'tooltip');
   tipEl.id = 'hover-tip';
   tipEl.hidden = true;
+  tipEl.classList.add('floating-owned');
   document.body.appendChild(tipEl);
 
   function showTip(anchor) {
     const text = anchor.dataset.tip;
     if (!text) { hideTip(); return; }
+    tipEl._ownerCard = anchor.closest('.step-card');
     tipEl.innerHTML = '';
     tipEl.appendChild(el('div', 'note-pop-text', text));
     tipEl.hidden = false;
@@ -2368,6 +2559,8 @@
   splitPanelEl.setAttribute('aria-modal', 'false');
   splitPanelEl.setAttribute('aria-labelledby', 'split-panel-title');
   splitPanelEl.hidden = true;
+  splitPanelEl.classList.add('floating-owned');
+  splitPanelEl._ownerCard = document.getElementById('step3');
   document.body.appendChild(splitPanelEl);
 
   function openSplitPanel(sourceId, anchorMapping) {
@@ -2377,6 +2570,7 @@
 
   /** Closing never re-renders the table, so the click that closed the panel still lands. */
   function closeSplitPanel() {
+    closeCalc();
     if (!splitPanel) return;
     splitPanel = null;
     splitPanelEl.hidden = true;
@@ -2417,6 +2611,7 @@
       : null;
     const meta = splitMeta[sourceId] || { note: '', updatedAt: null };
 
+    hideTip(); // a hovered button inside the panel is about to be replaced
     splitPanelEl.innerHTML = '';
 
     const head = el('div', 'sp-head');
@@ -2470,10 +2665,10 @@
           l.chip,
           `split-leg-${l.mappingIndex}-${l.chipIndex}`,
           `Share to ${legMapping.plName || 'this row'}, percent`,
-          state,
-          legs.filter((x) => Model.isSplitChip(x.chip))
+          state
         ));
         pctWrap.appendChild(document.createTextNode('%'));
+        pctWrap.appendChild(buildCalcButton(l, legMapping, entry));
       } else {
         pctWrap.textContent = '100% (whole)';
       }
@@ -2495,17 +2690,19 @@
     });
     splitPanelEl.appendChild(list);
 
-    // "Split to": add this account to another ProjectionLab Investments account.
+    // "Split to": add this account to another ProjectionLab Savings or Investments account.
     const usedPl = new Set(legs.map((l) => accountMappings[l.mappingIndex].plId).filter(Boolean));
     const targets = plAccounts.filter((a) =>
-      String(a.type || '').toLowerCase() === Model.SPLIT_TARGET_PL_TYPE &&
+      Model.isSplitTargetPlType(a.type) &&
       !usedPl.has(a.id) &&
       !isAssetWithLoanMapping({ plNativeType: a.nativeType })
     );
     if (targets.length) {
       const addWrap = el('div', 'sp-add');
-      const label = el('label', 'sp-label', 'Split to');
-      label.htmlFor = 'split-to-input';
+      // A plain heading, not a <label>: clicking it must not open the picker. Only the
+      // field itself opens it; aria-labelledby keeps the name for screen readers.
+      const label = el('div', 'sp-label', 'Add a split to…');
+      label.id = 'split-to-label';
       addWrap.appendChild(label);
       addWrap.appendChild(buildSplitToPicker(sourceId, entry, targets));
       splitPanelEl.appendChild(addWrap);
@@ -2552,6 +2749,247 @@
 
     splitPanelEl.hidden = false;
     positionSplitPanel();
+    syncCalcAfterRender();
+  }
+
+  // ---------- share calculator ($ amount → %) ----------
+  //
+  // A small popover from the calculator button on a split share in the panel. It fetches the
+  // Monarch account's current balance, the user types the dollars they want this share to be,
+  // and "Use this percent" puts the rounded percentage into that share.
+
+  // Outline calculator (+ − × =), same stroke style as the split and note icons.
+  const CALC_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="3"/><path d="M8 6.5h8M7 11.75h3M8.5 10.25v3M14 11.75h3M7.25 15.75l2.5 2.5M9.75 15.75l-2.5 2.5M14 15.85h3M14 18.15h3"/></svg>';
+  const CALC_FETCH_TIMEOUT_MS = 30000;
+
+  const calcPopEl = document.createElement('div');
+  calcPopEl.className = 'calc-pop';
+  calcPopEl.setAttribute('role', 'dialog');
+  calcPopEl.setAttribute('aria-labelledby', 'calc-pop-title');
+  calcPopEl.hidden = true;
+  calcPopEl.classList.add('floating-owned');
+  calcPopEl._ownerCard = document.getElementById('step3');
+  document.body.appendChild(calcPopEl);
+
+  // { chip, legMapping, sourceId, name, btnId, balance, status, error, fetchToken }
+  let calc = null;
+
+  function buildCalcButton(leg, legMapping, entry) {
+    const btn = el('button', 'sp-calc-btn');
+    btn.type = 'button';
+    btn.id = `split-calc-${leg.mappingIndex}-${leg.chipIndex}`;
+    btn.innerHTML = CALC_ICON_SVG;
+    btn.dataset.tip = 'Help me calculate the percentage from a dollar amount';
+    attachTip(btn);
+    btn.setAttribute('aria-label', `Calculate the share to ${legMapping.plName || 'this row'} from a dollar amount`);
+    btn.setAttribute('aria-haspopup', 'dialog');
+    const open = !!(calc && calc.chip === leg.chip);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      hideTip();
+      if (calc && calc.chip === leg.chip) { closeCalc(); return; }
+      openCalc(leg.chip, legMapping, entry, btn.id);
+    };
+    return btn;
+  }
+
+  function openCalc(chip, legMapping, entry, btnId) {
+    calc = {
+      chip, legMapping, sourceId: entry.sourceId, name: entry.name, btnId,
+      balance: null, status: 'loading', error: '', fetchToken: {},
+    };
+    document.querySelectorAll('.sp-calc-btn').forEach((b) => b.setAttribute('aria-expanded', b.id === btnId ? 'true' : 'false'));
+    renderCalc();
+    fetchCalcBalance();
+  }
+
+  function closeCalc() {
+    if (!calc) return;
+    calc = null;
+    calcPopEl.hidden = true;
+    calcPopEl.innerHTML = '';
+    document.querySelectorAll('.sp-calc-btn[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  }
+
+  /** Current balance of one Monarch account, read from the open Monarch tab. */
+  async function fetchCurrentMonarchBalance(sourceId) {
+    const tab = await findMonarchTab();
+    if (!tab) throw new Error('Open app.monarch.com in a tab (and sign in) to get the current balance.');
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-scripts/monarch.js'] });
+    const res = await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { type: 'FETCH_BALANCES', accountIds: [sourceId] }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Monarch took too long to answer. Try again.')), CALC_FETCH_TIMEOUT_MS)),
+    ]);
+    if (!res || !res.success) throw new Error(`Monarch: ${(res && res.error) || 'could not get the balance.'}`);
+    const acc = (res.accounts || []).find((a) => a.id === sourceId);
+    if (!acc) throw new Error('Monarch didn\'t return this account. It may be hidden or closed in Monarch.');
+    const n = Number(acc.balance);
+    if (!Number.isFinite(n)) throw new Error('Monarch returned a balance Chrysalis couldn\'t read.');
+    return n;
+  }
+
+  async function fetchCalcBalance() {
+    if (!calc) return;
+    const token = {};
+    calc.fetchToken = token;
+    calc.status = 'loading';
+    calc.error = '';
+    renderCalc();
+    try {
+      const balance = await fetchCurrentMonarchBalance(calc.sourceId);
+      if (!calc || calc.fetchToken !== token) return; // closed or retried meanwhile
+      calc.balance = balance;
+      calc.status = 'ready';
+      await applyFreshMonarchBalance(calc.sourceId, balance);
+    } catch (e) {
+      if (!calc || calc.fetchToken !== token) return;
+      calc.status = 'error';
+      calc.error = (e && e.message) || String(e);
+    }
+    renderCalc();
+  }
+
+  /**
+   * A balance fetched just now (by the calculator) replaces the cached one, in memory and in
+   * the saved account cache, so the split panel header, share amounts and row previews all
+   * show it. The Step 2 "Last refreshed" time is left alone: only this one account was refreshed.
+   */
+  async function applyFreshMonarchBalance(sourceId, balance) {
+    const acc = monarchAccounts.find((a) => a.id === sourceId);
+    if (!acc || Number(acc.displayBalance) === balance) return;
+    acc.displayBalance = balance;
+    refreshMappingRows();
+    try {
+      await chrome.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
+    } catch (e) {
+      console.warn('[Chrysalis][setup] Could not save the refreshed balance:', e);
+    }
+  }
+
+  /** Dollars → percent of |balance|, or a reason it can't be worked out. */
+  function calcPercent(amountRaw, balance) {
+    const text = String(amountRaw || '').replace(/[$,\s]/g, '');
+    if (text === '') return { pct: null, msg: '' };
+    const amount = Number(text);
+    if (!Number.isFinite(amount) || amount < 0) return { pct: null, msg: 'Enter a dollar amount, like 25000 or 25,000.50.' };
+    const base = Math.abs(balance);
+    if (base === 0) return { pct: null, msg: 'The balance is $0, so there\'s nothing to split.' };
+    if (Math.abs(amount) > base + 0.005) return { pct: null, msg: 'That\'s more than the whole balance.' };
+    return { pct: Model.roundPct((Math.abs(amount) / base) * 100), msg: '' };
+  }
+
+  function renderCalc() {
+    if (!calc) { calcPopEl.hidden = true; return; }
+    const keepAmount = calcPopEl.querySelector('#calc-amount');
+    const amountValue = keepAmount ? keepAmount.value : '';
+    calcPopEl.innerHTML = '';
+
+    const head = el('div', 'calc-head');
+    const title = el('div', 'calc-title', `Split to ${calc.legMapping.plName || 'this row'}`);
+    title.id = 'calc-pop-title';
+    head.appendChild(title);
+    const close = el('button', 'sp-close', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close calculator');
+    close.onclick = (e) => { e.stopPropagation(); closeCalc(); };
+    head.appendChild(close);
+    calcPopEl.appendChild(head);
+
+    const balBox = el('div', 'calc-balance');
+    balBox.appendChild(el('div', 'calc-label', `Current balance · ${calc.name}`));
+    if (calc.status === 'loading') {
+      const loading = el('div', 'calc-loading');
+      loading.innerHTML = '<span class="spinner"></span> Getting it from Monarch…';
+      balBox.appendChild(loading);
+    } else if (calc.status === 'error') {
+      balBox.appendChild(el('div', 'calc-error', calc.error));
+      const retry = el('button', 'calc-link', 'Try again');
+      retry.type = 'button';
+      retry.onclick = (e) => { e.stopPropagation(); fetchCalcBalance(); };
+      balBox.appendChild(retry);
+    } else {
+      const value = el('output', 'calc-value', USD_CENTS.format(calc.balance));
+      value.setAttribute('aria-live', 'polite');
+      balBox.appendChild(value);
+    }
+    calcPopEl.appendChild(balBox);
+
+    if (calc.status === 'ready') {
+      const field = el('div', 'calc-field');
+      const label = el('label', 'calc-label', `Amount to split to ${calc.legMapping.plName || 'this row'}`);
+      label.htmlFor = 'calc-amount';
+      field.appendChild(label);
+      const inputWrap = el('div', 'calc-input-wrap');
+      inputWrap.appendChild(el('span', 'calc-dollar', '$'));
+      const input = el('input', 'calc-input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.autocomplete = 'off';
+      input.id = 'calc-amount';
+      input.placeholder = '0.00';
+      input.value = amountValue;
+      inputWrap.appendChild(input);
+      field.appendChild(inputWrap);
+      calcPopEl.appendChild(field);
+
+      const result = el('div', 'calc-result');
+      result.appendChild(el('span', 'calc-label', 'Percent of balance'));
+      const pctOut = el('output', 'calc-pct');
+      pctOut.htmlFor = 'calc-amount';
+      result.appendChild(pctOut);
+      calcPopEl.appendChild(result);
+      const msg = el('div', 'calc-msg');
+      calcPopEl.appendChild(msg);
+
+      const use = el('button', 'sp-done calc-use', 'Use this percent');
+      use.type = 'button';
+      const foot = el('div', 'calc-foot');
+      foot.appendChild(use);
+      calcPopEl.appendChild(foot);
+
+      const update = () => {
+        const { pct, msg: why } = calcPercent(input.value, calc.balance);
+        pctOut.textContent = pct == null ? '—' : Model.formatPct(pct);
+        msg.textContent = why;
+        use.disabled = pct == null;
+        return pct;
+      };
+      const apply = () => {
+        const pct = update();
+        if (pct == null || !calc) return;
+        const { chip, btnId } = calc;
+        closeCalc();
+        onShareInput(chip, String(pct));
+        // Hand focus back to the share's % field (same row/chip suffix as the button).
+        const shareInput = document.getElementById(btnId.replace('split-calc-', 'split-leg-'));
+        if (shareInput) shareInput.focus();
+      };
+      input.addEventListener('input', update);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      use.onclick = (e) => { e.stopPropagation(); apply(); };
+      update();
+    }
+
+    calcPopEl.hidden = false;
+    positionCalc();
+    const amount = calcPopEl.querySelector('#calc-amount');
+    if (amount && document.activeElement !== amount) amount.focus();
+  }
+
+  function positionCalc() {
+    if (!calc || calcPopEl.hidden) return;
+    const btn = document.getElementById(calc.btnId);
+    if (!btn) return;
+    placeFloating(calcPopEl, btn.getBoundingClientRect(), 6, 200);
+  }
+
+  /** The split panel re-renders often; keep the calculator on its share, or close it if the share is gone. */
+  function syncCalcAfterRender() {
+    if (!calc) return;
+    const stillThere = (calc.legMapping.monarchAccounts || []).includes(calc.chip);
+    if (!stillThere || !document.getElementById(calc.btnId)) { closeCalc(); return; }
+    positionCalc();
   }
 
   /**
@@ -2564,6 +3002,7 @@
     input.type = 'text';
     input.id = 'split-to-input';
     input.placeholder = 'Select ProjectionLab account';
+    input.setAttribute('aria-labelledby', 'split-to-label');
     input.autocomplete = 'off';
     const menu = el('div', 'monarch-add-panel');
     menu.setAttribute('role', 'listbox');
@@ -2680,7 +3119,7 @@
       Object.assign(row, {
         plId: acc.id,
         plName: acc.name,
-        plType: acc.type || Model.SPLIT_TARGET_PL_TYPE,
+        plType: acc.type,
         plNativeType: acc.nativeType || '',
         monarchAccounts: [chip],
         monarchAccountsLoan: [],
@@ -2731,6 +3170,7 @@
       splitPanelEl.style.top = `${FLOAT_EDGE_Y}px`;
     }
     if (splitToMenuPlace) splitToMenuPlace();
+    positionCalc();
   }
 
   // The panel's height changes without a re-render (fading message, resized note box),
@@ -2741,13 +3181,17 @@
 
   // mousedown (not click) so a table re-render can't detach the target first.
   document.addEventListener('mousedown', (e) => {
+    if (calc && !calcPopEl.contains(e.target) && !(e.target.closest && e.target.closest('.sp-calc-btn'))) closeCalc();
     if (!splitPanel) return;
-    if (splitPanelEl.contains(e.target)) return;
+    if (splitPanelEl.contains(e.target) || calcPopEl.contains(e.target)) return;
     if (e.target.closest && (e.target.closest('.split-btn') || e.target.closest('.split-fix'))) return;
     closeSplitPanel();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && splitPanel) closeSplitPanel();
+    if (e.key !== 'Escape') return;
+    // Escape closes the innermost popover first.
+    if (calc) closeCalc();
+    else if (splitPanel) closeSplitPanel();
   });
   window.addEventListener('resize', positionSplitPanel);
   window.addEventListener('scroll', positionSplitPanel, true);
@@ -2848,6 +3292,28 @@
     if (!hasPl && !hasMonarchValue && !hasMonarchLoan) return;
     if (await persistMappings()) showRowSavedCheck(tr);
   }
+
+  // ---------- section hover lift ----------
+  // Popovers live on <body> (so cards can't clip them), which makes moving onto one count as
+  // leaving its card. Each popover root has class floating-owned and an _ownerCard; while the
+  // pointer is over a card or any popover it owns, that card keeps the .hover-lift style.
+  let liftedCard = null;
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target;
+    let card = t && t.closest ? t.closest('.step-card') : null;
+    if (!card && t && t.closest) {
+      const floating = t.closest('.floating-owned');
+      card = (floating && floating._ownerCard) || null;
+    }
+    if (card === liftedCard) return;
+    if (liftedCard) liftedCard.classList.remove('hover-lift');
+    liftedCard = card;
+    if (card) card.classList.add('hover-lift');
+  });
+  document.documentElement.addEventListener('mouseleave', () => {
+    if (liftedCard) liftedCard.classList.remove('hover-lift');
+    liftedCard = null;
+  });
 
   setupStepToggles();
   setupReadyPillHelp();

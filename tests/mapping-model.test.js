@@ -182,3 +182,46 @@ test('isAssetWithLoanMapping matches the existing native types', () => {
   assert.equal(M.isAssetWithLoanMapping({ plNativeType: 'real_estate' }), true);
   assert.equal(M.isAssetWithLoanMapping({ plNativeType: '401k' }), false);
 });
+
+test('Monarch Cash and Investments accounts can be split; other types cannot', () => {
+  assert.equal(M.isSplittableMonarchType('brokerage'), true);
+  assert.equal(M.isSplittableMonarchType('depository'), true);
+  assert.equal(M.isSplittableMonarchType('DEPOSITORY'), true);
+  for (const t of ['equity', 'credit', 'loan', 'real_estate', 'other_asset', '', undefined]) {
+    assert.equal(M.isSplittableMonarchType(t), false, String(t));
+  }
+});
+
+test('split shares can go to ProjectionLab Savings or Investments accounts only', () => {
+  assert.equal(M.isSplitTargetPlType('savings'), true);
+  assert.equal(M.isSplitTargetPlType('investment'), true);
+  for (const t of ['asset', 'debt', '', undefined]) {
+    assert.equal(M.isSplitTargetPlType(t), false, String(t));
+  }
+});
+
+test('a cash account split across Savings and Investments rows plans like any other split', () => {
+  const chk = (pct) => M.makeSplitChip('chk', 'Chase Savings', pct);
+  const mappings = [
+    row('efund', [chk(60)], { plType: 'savings', plNativeType: 'savings' }),
+    row('brokcash', [chk(40)]),
+  ];
+  const { rows } = M.planSync(mappings, { chk: 10000.01 });
+  assert.deepEqual(rows.map((r) => r.amountCents), [600001, 400000]);
+  assert.ok(rows.every((r) => r.write));
+});
+
+test('unbalancedSplits lists split accounts that are not at 100% (and nothing else)', () => {
+  assert.deepEqual(M.unbalancedSplits(couple()), []);
+  const under = couple();
+  under[1].monarchAccounts = [fid(70)]; // fid now 95%
+  const over = couple();
+  over[4].monarchAccounts = [sch(90)]; // sch now 110%
+  const missing = couple();
+  missing[3].monarchAccounts[0] = { ...fid(15), pct: null, pctMissing: true };
+  assert.deepEqual(M.unbalancedSplits(under).map((u) => [u.sourceId, u.state, u.total]), [['fid', 'under', 95]]);
+  assert.deepEqual(M.unbalancedSplits(over).map((u) => [u.sourceId, u.state, u.total]), [['sch', 'over', 110]]);
+  assert.deepEqual(M.unbalancedSplits(missing).map((u) => [u.sourceId, u.state]), [['fid', 'invalid']]);
+  assert.equal(M.describeUnbalancedSplit(M.unbalancedSplits(under)[0]), 'Fidelity 401(k) is at 95%');
+  assert.equal(M.describeUnbalancedSplit(M.unbalancedSplits(missing)[0]), 'Fidelity 401(k) has a share with no percentage');
+});

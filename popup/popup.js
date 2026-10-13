@@ -85,6 +85,20 @@
     contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
+  /** A split account's shares don't total 100%: nothing can sync until it's fixed in Setup. */
+  function renderSplitsIncomplete(unbalanced) {
+    setStatus('yellow', 'Incomplete split percentages');
+    const items = unbalanced.map((u) => `<li>${escapeHtml(Model.describeUnbalancedSplit(u))}</li>`).join('');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>Sync is paused until every split account's shares add up to 100%.</p>
+        <ul class="split-problems">${items}</ul>
+        <button type="button" class="btn btn-primary" id="open-setup-cta">Fix in Setup ↗</button>
+      </div>
+    `;
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+  }
+
   function renderNotOnMonarch(plCount, monarchTotal) {
     setStatus('gray', 'To use Chrysalis, open the Monarch app, then click the extension icon again.');
     contentEl.innerHTML = `
@@ -428,6 +442,12 @@
 
     if (!isConfigured) {
       renderNotSetUp();
+      return;
+    }
+
+    const unbalanced = Model.unbalancedSplits(mappings);
+    if (unbalanced.length) {
+      renderSplitsIncomplete(unbalanced);
       return;
     }
 

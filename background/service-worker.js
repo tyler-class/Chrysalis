@@ -278,6 +278,17 @@ async function runSyncWithTabId(tabId) {
       return { success: false, error: 'No account mappings configured' };
     }
 
+    // Nothing syncs while a split account's shares don't total 100% (this also covers
+    // auto-sync, which never goes through the popup).
+    const unbalanced = Model.unbalancedSplits(accountMappings);
+    if (unbalanced.length) {
+      return {
+        success: false,
+        blockedBySplits: true,
+        error: `Sync is paused until every split account totals 100%: ${unbalanced.map(Model.describeUnbalancedSplit).join('; ')}. Fix the split in Setup → Map Accounts.`,
+      };
+    }
+
     // Split chips resolve to their underlying Monarch account id.
     const allMonarchIds = Model.allSourceIds(accountMappings);
 
