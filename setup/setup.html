@@ -465,6 +465,13 @@
       font-size: 12px; /* slightly larger than the 11px base */
     }
     .map-table th.col-remove { text-align: center; }
+    /* Small squircle logos before the two main column headers. */
+    .th-with-logo { display: inline-flex; align-items: center; gap: 8px; }
+    .th-logo { flex: 0 0 auto; display: inline-flex; width: 18px; height: 18px; border-radius: 5px; overflow: hidden; }
+    .th-logo img { width: 100%; height: 100%; display: block; object-fit: contain; }
+    .th-logo-monarch { background: var(--monarch-pill-bg); box-shadow: inset 0 0 0 1px rgba(239,108,43,.25); }
+    .th-logo-monarch img { padding: 3px; box-sizing: border-box; }
+    .th-logo-pl img { object-fit: cover; }
     .map-table th.col-pl { padding-left: 10px; }
     /* 34px of top padding is the gutter for the optional row title; the bottom is 18px (+ the
        Add field's 10px margin). */
@@ -1326,9 +1333,9 @@
         </colgroup>
         <thead>
           <tr>
-            <th>Monarch Accounts (select one or more)</th>
+            <th><span class="th-with-logo"><span class="th-logo th-logo-monarch"><img src="../icons/monarch-icon.png" alt="" /></span>Monarch Accounts (select one or more)</span></th>
             <th class="map-arrow-col"></th>
-            <th class="col-pl">ProjectionLab Account</th>
+            <th class="col-pl"><span class="th-with-logo"><span class="th-logo th-logo-pl"><img src="../icons/projectionLab-icon.png" alt="" /></span>ProjectionLab Account</span></th>
             <th class="col-saved" style="text-align:center"></th>
             <th class="col-remove"></th>
           </tr>
