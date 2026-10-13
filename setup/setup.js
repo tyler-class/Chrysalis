@@ -1624,14 +1624,16 @@
   // Drag a chip to reorder it within its lane or move it to another lane (in the same row or
   // another row). Only drops the dropdowns would also allow are accepted (see canDropChip).
 
-  let chipDrag = null; // { chip, fromMapping, fromLane, height }
+  let chipDrag = null; // { chip, fromMapping, fromLane }
   let activeDropZone = null;
   // The dashed chip-shaped placeholder where the dragged chip will land. It's a real flex item
   // in the lane, so the chips around it move aside; it grows in and shrinks out so they slide.
   let dropSlot = null; // { el, rowEl, index }
   const DROP_SLOT_WIDTH = 90;
+  const DROP_SLOT_MIN_WIDTH = 40;
   const DROP_SLOT_MS = 120;
   const CHIP_GAP = 8; // matches .chips-row gap
+  const WHOLE_CHIP_HEIGHT = 32; // a whole-account chip; split chips are a little taller
 
   function reducedMotion() {
     return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1648,18 +1650,48 @@
     ).onfinish = () => el.remove();
   }
 
+  /**
+   * Width for a just-inserted placeholder: up to DROP_SLOT_WIDTH, but only as wide as the room
+   * left on its line, so it doesn't push a chip onto a new line and make the row taller. It
+   * only wraps when less than DROP_SLOT_MIN_WIDTH is left. Measured with the placeholder at
+   * zero width and any shrinking-out placeholder hidden, all before the next paint.
+   */
+  function dropSlotWidth(el, rowEl) {
+    const leaving = Array.from(rowEl.querySelectorAll(':scope > .chip-drop-slot.leaving'));
+    leaving.forEach((n) => { n.style.display = 'none'; });
+    el.style.width = '0px';
+    const rowBox = rowEl.getBoundingClientRect();
+    const contentRight = rowBox.right - (parseFloat(getComputedStyle(rowEl).paddingRight) || 0);
+    const slotBox = el.getBoundingClientRect();
+    let lineRight = slotBox.right;
+    for (let n = el.nextElementSibling; n; n = n.nextElementSibling) {
+      if (n.style.display === 'none') continue;
+      const r = n.getBoundingClientRect();
+      if (r.top >= slotBox.bottom) break; // next line
+      lineRight = Math.max(lineRight, r.right);
+    }
+    leaving.forEach((n) => { n.style.display = ''; });
+    const free = Math.floor(contentRight - lineRight);
+    return free >= DROP_SLOT_MIN_WIDTH ? Math.min(DROP_SLOT_WIDTH, free) : DROP_SLOT_WIDTH;
+  }
+
   /** Show the placeholder at `index` in a lane (no-op if it's already there). */
   function placeDropSlot(rowEl, index) {
     if (dropSlot && dropSlot.rowEl === rowEl && dropSlot.index === index) return;
     if (dropSlot) retireDropSlot(dropSlot.el);
     const el = document.createElement('div');
     el.className = 'chip-drop-slot';
-    el.style.height = `${(chipDrag && chipDrag.height) || 32}px`;
     const tags = rowEl.querySelectorAll(':scope > .chip-tag');
+    // Match the chips it sits between (whole and split chips differ by a few px), so the
+    // placeholder never makes its line taller. An empty lane gets a whole chip's height.
+    const neighbor = tags[index] || tags[index - 1];
+    el.style.height = `${neighbor ? neighbor.offsetHeight : WHOLE_CHIP_HEIGHT}px`;
     rowEl.insertBefore(el, tags[index] || null);
+    const width = dropSlotWidth(el, rowEl);
+    el.style.width = `${width}px`;
     if (!reducedMotion() && typeof el.animate === 'function') {
       el.animate(
-        [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${DROP_SLOT_WIDTH}px`, marginRight: '0px', opacity: 1 }],
+        [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${width}px`, marginRight: '0px', opacity: 1 }],
         { duration: DROP_SLOT_MS, easing: 'ease-out' }
       );
     }
@@ -1778,7 +1810,7 @@
     });
     tag.addEventListener('mouseup', () => { tag.draggable = false; });
     tag.addEventListener('dragstart', (e) => {
-      chipDrag = { chip, fromMapping: mapping, fromLane: lane, height: tag.offsetHeight };
+      chipDrag = { chip, fromMapping: mapping, fromLane: lane };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', chip.name || '');
       hideNotePop();
