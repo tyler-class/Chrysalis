@@ -1589,7 +1589,7 @@
       if (iVal !== jVal) return iVal - jVal;
       return a.localeCompare(b);
     });
-    let html = '<option value="">+ add Monarch account</option>';
+    let html = '<option value="">+ Add Monarch Account</option>';
     for (const cat of sortedCategories) {
       const accounts = byCategory.get(cat);
       html += `<optgroup label="${escapeHtml(displayNameForType(cat))}">`;
@@ -1899,7 +1899,7 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
+        input.placeholder = '+ Add Monarch Account';
         input.autocomplete = 'off';
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
@@ -2047,7 +2047,7 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
+        input.placeholder = '+ Add Monarch Account';
         input.autocomplete = 'off';
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
@@ -2119,7 +2119,7 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
+        input.placeholder = '+ Add Monarch Account';
         input.autocomplete = 'off';
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
@@ -2196,7 +2196,7 @@
     const plInput = document.createElement('input');
     plInput.type = 'text';
     plInput.className = 'add-dropdown-search';
-    plInput.placeholder = 'Select ProjectionLab account';
+    plInput.placeholder = '+ Add ProjectionLab Account';
     plInput.autocomplete = 'off';
     plInput.readOnly = true;
     const plPanel = document.createElement('div');
@@ -2208,7 +2208,7 @@
         plInput.placeholder = '';
       } else {
         plInput.value = '';
-        plInput.placeholder = 'Select ProjectionLab account';
+        plInput.placeholder = '+ Add ProjectionLab Account';
       }
     }
     function updatePLPanel() {

@@ -162,7 +162,7 @@ Each row represents one **ProjectionLab account** (the destination). On the left
 
 To add a mapping:
 
-1. Use the **+ add Monarch account** dropdown to select a Monarch account — it will appear as a chip
+1. Use the **+ Add Monarch Account** dropdown to select a Monarch account — it will appear as a chip
 2. Add more Monarch accounts to the same row if needed
 3. Select the corresponding ProjectionLab account on the right
 4. Click **+ add PL account mapping** to add another row for a different PL account
