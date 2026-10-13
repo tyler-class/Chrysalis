@@ -34,6 +34,24 @@ mega-backdoor money into one bucket). Each split can carry a note, splits are in
 in mapping backups, and Sync History shows exactly how every share was calculated.
 See [Splitting an account](#splitting-an-account).
 
+**Also in v1.2.0:**
+
+- **Sync is paused while a split doesn't total 100%.** The popup shows
+  **Incomplete split percentages** with a link to Setup instead of **Sync Now**,
+  and scheduled auto-syncs are skipped until the split is fixed.
+- **"Last refreshed" only appears after a successful load.** A failed Monarch or
+  ProjectionLab load (bad API key, timeout, missing tab) no longer looks like a
+  refresh. _(#30)_
+- **Auto-sync schedule fields are locked properly.** Frequency, Day and Time can
+  only be changed when Advanced Settings is unlocked and **Run sync automatically**
+  is on. _(#33)_
+- **Setup uses your most recently used Monarch tab** when more than one is open,
+  and your ProjectionLab API key is no longer printed to the extension's console
+  log. _(Thanks @jaronrubenstein — #32)_
+- **Setup polish:** steady column widths in the mapping table, styled dropdowns
+  and hover tips, smooth open/close for each section, and popovers that always
+  stay inside the window.
+
 <details>
 <summary><strong>Previous release — v1.1.0</strong></summary>
 
@@ -176,19 +194,19 @@ Any Monarch account under the **Cash** heading (checking, savings, money market�
 
 2. Click the **split icon** on its chip. The split panel opens, with the whole balance (100%) in this row to start.
 
-   <kbd><img src="screenshots/split-panel-new.png" width="600" alt="The split panel just opened: one share at 100%, fully allocated"></kbd>
+   <kbd><img src="screenshots/split-panel-new.png" width="600" alt="The split panel just opened: one share at 100% ($7,500), fully allocated"></kbd>
 
 3. Under **Add a split to…**, pick another ProjectionLab account. If that account already has a row, the share is added to that row; otherwise a new row is created for it. The panel shows each share's dollar amount and anything still unallocated. The totals of all split entries for a Monarch account must be exactly 100%.
 
-   <kbd><img src="screenshots/split-panel-under-100.png" width="400" alt="Split panel with two shares at 50% and 40%, showing 10% ($750) unallocated"></kbd>
+   <kbd><img src="screenshots/split-panel-under-100.png" width="600" alt="Split panel with two shares at 75% and 15%, showing 10% ($750) unallocated"></kbd>
 
 4. Enter each share's percentage. A newly added share starts with whatever is unallocated so far. When the shares add up to 100%, the panel shows **Fully allocated** in green.
 
-   <kbd><img src="screenshots/split-panel-fully-allocated.png" width="400" alt="Split panel with two shares at 50% each, fully allocated"></kbd>
+   <kbd><img src="screenshots/split-panel-fully-allocated.png" width="600" alt="Split panel with two shares at 75% and 25%, fully allocated"></kbd>
 
    Thinking in dollars? Click the **calculator icon** next to a share, type the dollar amount, and Chrysalis works out the percentage from the account's current Monarch balance (keep a Monarch tab open). **Use this percent** puts it in the share.
 
-   <kbd><img src="screenshots/split-calculator.png" width="400" alt="Share calculator: $2,450 of a $7,500 balance is 32.67%"></kbd>
+   <kbd><img src="screenshots/split-calculator.png" width="400" alt="Share calculator: $1,250 of a $7,500 balance is 16.67%"></kbd>
 
 5. Optionally write a **Note** (up to 500 characters) to remind yourself where the percentages came from, documenting your thought process so you can easily remember what you did later.
 
