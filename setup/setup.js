@@ -2075,6 +2075,9 @@
 
     const cellMonarch = document.createElement('td');
     cellMonarch.className = 'map-cell';
+    // Optional row title, in the gutter across the top of the row (positioned on the <tr>).
+    tr.classList.add('map-row');
+    cellMonarch.appendChild(buildRowTitle(mapping));
     const monarchCellWrap = document.createElement('div');
     const monarchNormalLayout = document.createElement('div');
     monarchNormalLayout.className = 'monarch-normal-layout';
@@ -3627,6 +3630,113 @@
     refreshMappingRows(); // redraw so the previous last row gets its swap button
   };
 
+  // ---------- row title ----------
+  // An optional label for a row, written by the user (no automatic title). It lives in the gutter
+  // across the top of the row: blank until hovered, when a pencil appears; with a title, the
+  // title shows there. Saved with the row (Model.TITLE_MAX characters) and kept in backups.
+  const PENCIL_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  let titleEdit = null; // { mapping, draft } while a title is being edited (survives re-renders)
+
+  function buildRowTitle(mapping) {
+    const gutter = document.createElement('div');
+    gutter.className = 'row-title';
+    const editing = titleEdit && titleEdit.mapping === mapping;
+
+    if (editing) {
+      gutter.classList.add('is-editing');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'row-title-input';
+      input.id = `row-title-${accountMappings.indexOf(mapping)}`;
+      input.maxLength = Model.TITLE_MAX;
+      input.placeholder = 'Title (Optional)';
+      input.autocomplete = 'off';
+      input.setAttribute('aria-label', 'Row title');
+      input.value = titleEdit.draft;
+      input.addEventListener('input', () => {
+        if (titleEdit) titleEdit.draft = input.value;
+        sizeTitleInput(input);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finishTitleEdit(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishTitleEdit(false); }
+      });
+      input.addEventListener('blur', () => {
+        if (renderingRows || !input.isConnected) return; // a re-render, not the user leaving
+        finishTitleEdit(true);
+      });
+      gutter.appendChild(input);
+      queueMicrotask(() => {
+        if (!input.isConnected) return;
+        sizeTitleInput(input);
+        if (document.activeElement === input) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+      return gutter;
+    }
+
+    const title = mapping.title || '';
+    if (title) {
+      const text = document.createElement('span');
+      text.className = 'row-title-text';
+      text.textContent = title;
+      gutter.appendChild(text);
+      // Full title in a tip only when it's cut off.
+      queueMicrotask(() => {
+        if (text.isConnected && text.scrollWidth > text.clientWidth) {
+          text.dataset.tip = title;
+          attachTip(text);
+        }
+      });
+    }
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'row-title-edit';
+    edit.innerHTML = PENCIL_ICON_SVG;
+    const label = title ? 'Edit title' : 'Add a title';
+    edit.setAttribute('aria-label', label);
+    edit.dataset.tip = label;
+    attachTip(edit, REMOVE_TIP_DELAY_MS);
+    edit.onclick = (e) => {
+      e.stopPropagation();
+      hideTip();
+      titleEdit = { mapping, draft: title };
+      refreshMappingRows();
+    };
+    gutter.appendChild(edit);
+    return gutter;
+  }
+
+  const TITLE_INPUT_MIN_WIDTH = 400;
+
+  /** The title box starts 400px wide and grows with its text, up to the row's width. */
+  function sizeTitleInput(input) {
+    const gutter = input.parentElement;
+    if (!gutter) return;
+    const cs = getComputedStyle(input);
+    const ctx = (sizeTitleInput.canvas || (sizeTitleInput.canvas = document.createElement('canvas'))).getContext('2d');
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const text = input.value || input.placeholder;
+    const chrome = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
+      + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0) + 4; // + caret room
+    const max = gutter.clientWidth;
+    const want = Math.ceil(ctx.measureText(text).width + chrome);
+    input.style.width = `${Math.min(max, Math.max(TITLE_INPUT_MIN_WIDTH, want))}px`;
+  }
+
+  async function finishTitleEdit(save) {
+    if (!titleEdit) return;
+    const { mapping, draft } = titleEdit;
+    titleEdit = null;
+    const changed = save && Model.normalizeTitle(draft) !== (mapping.title || '');
+    if (changed) mapping.title = Model.normalizeTitle(draft);
+    refreshMappingRows();
+    if (changed) {
+      if (await persistMappings()) showRowSavedCheck(rowElByMapping.get(mapping));
+    }
+  }
+
   // ---------- swap rows ----------
   // A ⇅ button on the divider between two rows (at the table's right border) swaps them. The row
   // order is the saved order of the mappings, so it persists and is kept in backups.
@@ -3634,7 +3744,7 @@
   const ROW_SWAP_MS = 200;
 
   function rowLabel(m) {
-    return (m && m.plName) || 'unnamed';
+    return (m && (m.title || m.plName)) || 'unnamed';
   }
 
   function buildRowSwapButton(index) {
