@@ -468,7 +468,7 @@
     .map-table td.col-remove { text-align: center; }
     /* Sits beside the ProjectionLab picker (first line of the row), not the row's middle. */
     .map-table td.col-saved { text-align: left; vertical-align: top; padding-left: 0; padding-right: 0; }
-    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 44px; } /* = ProjectionLab picker height */
+    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 32px; } /* = ProjectionLab picker height */
     .map-cell { min-width: 200px; }
     .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
@@ -560,6 +560,9 @@
        below sits 4px from the field (like "Add a split to…") while the layout stays the same. */
     .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; margin-bottom: 10px; }
     .monarch-add-widget .add-dropdown-search { margin-bottom: 0; }
+    /* Mapping-table fields are the same height as a whole Monarch chip (32px). This outranks
+       the page-wide input[type="text"] padding that made them 44px. */
+    .map-table input.add-dropdown-search { box-sizing: border-box; height: 32px; min-height: 0; padding-top: 0; padding-bottom: 0; }
     /* A chosen ProjectionLab account is inert (clear it with ×): no text cursor. */
     .map-cell-pl .add-dropdown-search.is-locked { cursor: default; }
     .add-dropdown-search {
