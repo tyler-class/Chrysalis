@@ -256,13 +256,13 @@
       padding: 24px 28px;
       margin-bottom: 18px;
       box-shadow: var(--shadow-md);
-      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      transition: box-shadow 0.2s ease;
     }
-    /* .hover-lift (setup.js) keeps a card lifted while the pointer is on a popover it owns. */
+    /* Hover deepens the shadow (no movement). .is-hovered (setup.js) keeps it while the pointer
+       is on a popover the card owns, since popovers live outside the card in the page. */
     .step-card:hover,
-    .step-card.hover-lift { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
-    /* The hover transform gives each card its own stacking context, so a hovered card
-       later in the page would paint over step 3's dropdowns. Keep step 3 on top. */
+    .step-card.is-hovered { box-shadow: var(--shadow-lg); }
+    /* Keep step 3's dropdowns above the cards that follow it (Advanced). */
     #step3 { position: relative; z-index: 2; }
     .step-card.complete { border-color: var(--good-line); background: var(--card); }
     .step-head {
@@ -440,9 +440,12 @@
       min-width: 640px; /* below this the Monarch column gets too narrow for its chips */
     }
     .map-table col.col-w-arrow { width: 48px; }
-    .map-table col.col-w-pl { width: 38%; } /* ≈334px at the page's full width; scales down on narrow windows */
-    .map-table col.col-w-saved { width: 36px; }
-    .map-table col.col-w-remove { width: 52px; }
+    /* ProjectionLab column: 28.8% makes the field 239px at the page's full width (885px table)
+       and scales it down on narrow windows. (Chrome ignores calc() widths on <col>.) The
+       Monarch column takes all the rest. */
+    .map-table col.col-w-pl { width: 28.8%; }
+    .map-table col.col-w-saved { width: 22px; }
+    .map-table col.col-w-remove { width: 36px; }
     .map-table th {
       text-align: left;
       padding: 12px 14px;
@@ -461,16 +464,55 @@
     .map-table th.col-pl {
       font-size: 12px; /* slightly larger than the 11px base */
     }
-    .map-table th.col-remove { width: 44px; text-align: center; }
-    .map-table th.col-pl { min-width: 300px; padding-left: 28px; }
-    .map-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    .map-table th.col-remove { text-align: center; }
+    /* Small squircle logos before the two main column headers. */
+    .th-with-logo { display: inline-flex; align-items: center; gap: 8px; }
+    .th-logo { flex: 0 0 auto; display: inline-flex; width: 18px; height: 18px; border-radius: 5px; overflow: hidden; }
+    .th-logo img { width: 100%; height: 100%; display: block; object-fit: contain; }
+    .th-logo-monarch { background: var(--monarch-pill-bg); box-shadow: inset 0 0 0 1px rgba(239,108,43,.25); }
+    .th-logo-monarch img { padding: 3px; box-sizing: border-box; }
+    .th-logo-pl img { object-fit: cover; }
+    .map-table th.col-pl { padding-left: 10px; }
+    /* 34px of top padding is the gutter for the optional row title; the bottom is 18px (+ the
+       Add field's 10px margin). */
+    .map-table td { padding: 34px 14px 18px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    /* Row title (setup.js buildRowTitle): positioned on the row so it spans every column. */
+    #map-tbody tr.map-row { position: relative; }
+    .row-title {
+      /* 37px: down to where the first line of chips starts (they sit centered in a 40px line, a few
+         px below the 34px padding), so the title is midway between the row's top edge and the chips. */
+      position: absolute; top: 0; left: 14px; right: 14px; height: 37px; z-index: 1;
+      display: flex; align-items: center; gap: 6px; min-width: 0;
+    }
+    .row-title-text {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 14px; font-weight: 700; color: var(--ink-2);
+    }
+    .row-title-edit {
+      flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+      background: none; border: 1px solid transparent; border-radius: 5px; color: var(--ink-3); cursor: pointer;
+      opacity: 0; transition: opacity 0.12s;
+    }
+    .row-title-edit svg { width: 12px; height: 12px; display: block; }
+    .row-title:hover .row-title-edit,
+    .row-title-edit:focus-visible { opacity: 1; }
+    .row-title-edit:hover { color: var(--ink); background: var(--card); border-color: var(--line-strong); }
+    .row-title-edit:focus-visible { outline: 2px solid var(--projlab); outline-offset: 1px; }
+    /* Width is set by setup.js sizeTitleInput: 400px to start, growing with the text up to the row. */
+    #map-tbody input.row-title-input {
+      flex: 0 0 auto; width: 400px; min-width: 0; max-width: 100%; height: 26px; margin: 0; padding: 0 7px; box-sizing: border-box;
+      font: inherit; font-size: 14px; font-weight: 700; color: var(--ink-2);
+      background: var(--card); border: 1px solid var(--line-strong); border-radius: 5px;
+    }
+    #map-tbody input.row-title-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(27,26,20,0.12); }
     .map-table tr:last-child td { border-bottom: none; }
-    .map-table td.col-remove { text-align: center; }
+    .map-table td.col-remove { text-align: center; padding-left: 0; padding-right: 0; }
     /* Sits beside the ProjectionLab picker (first line of the row), not the row's middle. */
     .map-table td.col-saved { text-align: left; vertical-align: top; padding-left: 0; padding-right: 0; }
-    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 44px; } /* = ProjectionLab picker height */
+    .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 32px; } /* = ProjectionLab picker height */
     .map-cell { min-width: 200px; }
-    .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
+    /* Close to the arrow on the left, close to the save ✓ and row × on the right. */
+    .map-cell.map-cell-pl { padding-left: 10px; padding-right: 6px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
     .map-cell-pl .add-dropdown-search { min-width: 0; }
     .map-arrow {
@@ -481,8 +523,29 @@
       white-space: nowrap;
     }
     .map-arrow[data-aggregate] { cursor: help; }
-    /* Centered in its fixed 48px column; no side padding so the ∑→ arrow fits. */
-    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; }
+    /* Centered in its fixed 48px column (no side padding so the ∑→ arrow fits). The 32px line
+       box matches the ProjectionLab field, so the arrow lines up with the field's center. */
+    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; line-height: 32px; }
+    /* Swap rows (setup.js buildRowSwapButton): a round ⇅ centered on the corner where the divider
+       below a row meets the table's right border. Faint until either neighboring row is hovered. */
+    .map-table td.col-remove { position: relative; }
+    .row-swap {
+      /* -0.5px: the centers of the 1px divider and the table's 1px right border */
+      position: absolute; right: -0.5px; bottom: -0.5px; transform: translate(50%, 50%); z-index: 3;
+      display: flex; align-items: center; justify-content: center; width: 23px; height: 23px; padding: 0;
+      border: 1px solid var(--line-strong); border-radius: 50%; background: var(--card); color: var(--ink-2);
+      cursor: pointer; transition: opacity 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      /* Hidden (and not clickable) until one of its two rows is hovered; faded then; full on hover. */
+      opacity: 0; pointer-events: none;
+    }
+    .row-swap svg { width: 13px; height: 13px; display: block; }
+    #map-tbody tr:hover .row-swap,
+    #map-tbody tr:has(+ tr:hover) .row-swap { opacity: 0.4; pointer-events: auto; }
+    /* As specific as the row-hover rules above (and later), so hovering the button itself wins. */
+    #map-tbody tr td .row-swap:hover,
+    #map-tbody tr td .row-swap:focus-visible { opacity: 1; pointer-events: auto; }
+    .row-swap:hover { color: var(--ink); border-color: var(--ink-3); box-shadow: var(--shadow-sm); }
+    .row-swap:focus-visible { outline: 2px solid var(--projlab); outline-offset: 2px; }
     .chips-row {
       display: flex;
       flex-wrap: wrap;
@@ -497,7 +560,8 @@
     }
     .chips-row:empty + .monarch-add-row { margin-top: 0; }
     .monarch-asset-with-loan-layout { display: none; }
-    .monarch-asset-with-loan-layout.visible { display: block; }
+    /* 3px: start the "Asset value" label where chips start, so the row title above has equal room. */
+    .monarch-asset-with-loan-layout.visible { display: block; padding-top: 3px; }
     .monarch-normal-layout { display: block; }
     .monarch-normal-layout.hidden { display: none; }
     .re-lane { margin-bottom: 14px; }
@@ -517,6 +581,34 @@
       border: 1px solid var(--monarch);
     }
     .chip-tag .remove { background: none; border: none; color: var(--monarch-pill-ink); opacity: 0.7; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
+    /* Drag and drop (setup.js makeChipDraggable / registerChipDropZone). The grip sits in the
+       chip's left padding and fades in on hover, so the chip never changes size. */
+    /* translate(0, 0) gives each chip its own layer, so Chrome's drag ghost keeps the rounded
+       corners instead of filling the rectangle around them with white. */
+    .chip-tag.chip-draggable { position: relative; padding-left: 15px; cursor: grab; transform: translate(0, 0); }
+    .chip-grip {
+      position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      display: flex; color: var(--monarch-pill-ink); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+    }
+    .chip-grip svg { width: 6px; height: 11px; display: block; fill: currentColor; }
+    .chip-tag.chip-draggable:hover .chip-grip { opacity: 0.55; }
+    .chip-tag.chip-dragging { opacity: 0.35; }
+    .chip-tag.chip-dragging .chip-grip { opacity: 0; }
+    .chip-drop-target { outline: 2px dashed rgba(239,108,43,.6); outline-offset: 4px; border-radius: 10px; }
+    /* Where the dragged chip will land: a dashed chip of the same height and corner radius. */
+    /* Zero height so it never changes a line's height; it only takes width (so chips move
+       aside). The dashed chip shape is drawn centered on it at --slot-h (setup.js placeDropSlot). */
+    .chip-drop-slot {
+      flex: 0 0 auto; position: relative; align-self: center; width: 90px; height: 0;
+      pointer-events: none;
+    }
+    /* Alone on its own line: real height, so the lane grows a line instead of overlapping. */
+    .chip-drop-slot.own-line { height: var(--slot-h, 32px); }
+    .chip-drop-slot::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--slot-h, 32px);
+      transform: translateY(-50%); box-sizing: border-box;
+      border: 1.5px dashed var(--monarch); border-radius: 8px; background: rgba(239,108,43,.06);
+    }
     .chip-tag .remove:hover { color: var(--red); opacity: 1; }
     .add-dropdown {
       font-family: inherit;
@@ -530,7 +622,15 @@
       cursor: pointer;
     }
     .add-dropdown:hover { border-color: var(--primary); color: var(--ink); }
-    .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; }
+    /* The field's usual 10px bottom margin lives on the widget instead, so a picker opening
+       below sits 4px from the field (like "Add a split to…") while the layout stays the same. */
+    .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; margin-bottom: 10px; }
+    .monarch-add-widget .add-dropdown-search { margin-bottom: 0; }
+    /* Mapping-table fields are the same height as a whole Monarch chip (32px). This outranks
+       the page-wide input[type="text"] padding that made them 44px. */
+    .map-table input.add-dropdown-search { box-sizing: border-box; height: 32px; min-height: 0; padding-top: 0; padding-bottom: 0; }
+    /* A chosen ProjectionLab account is inert (clear it with ×): no text cursor. */
+    .map-cell-pl .add-dropdown-search.is-locked { cursor: default; }
     .add-dropdown-search {
       font-family: inherit;
       font-size: 12px;
@@ -584,7 +684,7 @@
       position: absolute;
       right: 8px;
       top: 50%;
-      transform: translateY(calc(-50% - 4px));
+      transform: translateY(-50%); /* centered on the field (its margin now sits on the wrapper) */
       background: none;
       border: none;
       color: var(--muted);
@@ -615,15 +715,35 @@
       box-shadow: var(--shadow-lg);
       z-index: 1000;
     }
+    /* Not enough room below (setup.js fitRowPicker): open above the field instead. */
+    .monarch-add-panel.open-up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
     .monarch-add-panel-header {
       font-weight: 700;
-      font-size: 11px;
+      font-size: 13px; /* same as the account rows */
       color: var(--text);
       background: var(--surface);
       padding: 6px 12px;
       position: sticky;
       top: 0;
       z-index: 1;
+    }
+    /* Monarch pickers are wider than their 180px field so account names don't wrap: they size
+       to the longest name, between 280px and 360px. The ProjectionLab picker keeps its width. */
+    .monarch-normal-layout .monarch-add-panel,
+    .re-lane .monarch-add-panel { width: max-content; min-width: max(100%, 280px); max-width: 360px; }
+    /* Monarch pickers: header with a right-aligned "Select All" (setup.js monarchCategoryHeader). */
+    .monarch-add-panel-header.has-select-all { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .select-all-btn {
+      font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2);
+      background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+    }
+    .select-all-btn:hover { color: var(--ink); }
+    /* Picked during this picker session (setup.js buildMonarchPicker): green check on the right. */
+    .monarch-add-panel-option.is-picked { position: relative; padding-right: 34px; }
+    .opt-check {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--good); font-weight: 700; font-size: 14px; line-height: 1;
     }
     .monarch-add-panel-option {
       padding: 8px 12px;
@@ -1071,8 +1191,6 @@
 
     @media (prefers-reduced-motion: reduce) {
       .step-card,
-      .step-card:hover,
-      .step-card.hover-lift,
       .chip.ok .dot {
         animation: none !important;
         transition: none !important;
@@ -1104,7 +1222,7 @@
           class="help-icon-link"
           target="_blank"
           rel="noopener noreferrer"
-          title="Need help?"
+          data-tip="Need help?"
           aria-label="Need help? Open documentation on GitHub"
         >?</a>
       </div>
@@ -1215,10 +1333,10 @@
         </colgroup>
         <thead>
           <tr>
-            <th>Monarch Accounts (select one or more)</th>
+            <th><span class="th-with-logo"><span class="th-logo th-logo-monarch"><img src="../icons/monarch-icon.png" alt="" /></span>Monarch Accounts (select one or more)</span></th>
             <th class="map-arrow-col"></th>
-            <th class="col-pl">ProjectionLab Account</th>
-            <th class="col-saved" style="width:36px;text-align:center"></th>
+            <th class="col-pl"><span class="th-with-logo"><span class="th-logo th-logo-pl"><img src="../icons/projectionLab-icon.png" alt="" /></span>ProjectionLab Account</span></th>
+            <th class="col-saved" style="text-align:center"></th>
             <th class="col-remove"></th>
           </tr>
         </thead>

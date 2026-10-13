@@ -3,7 +3,9 @@
  * the service worker, setup page and popup (and the Node tests in tests/).
  *
  * Schema (one row per ProjectionLab account):
- *   { plId, plName, plType, plNativeType, monarchAccounts: [chip], monarchAccountsLoan: [chip] }
+ *   { plId, plName, plType, plNativeType, monarchAccounts: [chip], monarchAccountsLoan: [chip], title? }
+ * `title` is an optional user-written label for the row (up to TITLE_MAX characters); it's only
+ * stored when non-empty.
  *
  * A chip is either a whole Monarch account:   { id, name }
  * or a split share of one (cash/investment):  { id: 'split:<monarchId>', sourceId: '<monarchId>', name, pct }
@@ -22,6 +24,7 @@
 (function (global) {
   const SPLIT_PREFIX = 'split:';
   const NOTE_MAX = 500;
+  const TITLE_MAX = 250;
   const EXPORT_FORMAT = 'chrysalis-mappings';
   const EXPORT_VERSION = 2;
   // Monarch account types that can be split: Investments (brokerage, 401(k), IRA, HSA, 529…)
@@ -88,6 +91,10 @@
     return { id: SPLIT_PREFIX + sourceId, sourceId: String(sourceId), name: name || String(sourceId), pct: roundPct(pct) };
   }
 
+  function normalizeTitle(t) {
+    return typeof t === 'string' ? t.trim().slice(0, TITLE_MAX) : '';
+  }
+
   function normalizeChip(a) {
     if (!a || a.id == null) return null;
     if (!isSplitChip(a)) {
@@ -134,6 +141,7 @@
           monarchAccountsLoan: Array.isArray(m.monarchAccountsLoan)
             ? m.monarchAccountsLoan.map(normalizeChip).filter(Boolean)
             : [],
+          title: normalizeTitle(m.title),
         });
         continue;
       }
@@ -168,14 +176,19 @@
         : { id: c.id, name: c.name };
       return out;
     };
-    return (mappings || []).map((m) => ({
-      plId: m.plId || '',
-      plName: m.plName || '',
-      plType: m.plType || '',
-      plNativeType: m.plNativeType || '',
-      monarchAccounts: (m.monarchAccounts || []).map(cleanChip),
-      monarchAccountsLoan: (m.monarchAccountsLoan || []).map(cleanChip),
-    }));
+    return (mappings || []).map((m) => {
+      const row = {
+        plId: m.plId || '',
+        plName: m.plName || '',
+        plType: m.plType || '',
+        plNativeType: m.plNativeType || '',
+        monarchAccounts: (m.monarchAccounts || []).map(cleanChip),
+        monarchAccountsLoan: (m.monarchAccountsLoan || []).map(cleanChip),
+      };
+      const title = normalizeTitle(m.title);
+      if (title) row.title = title; // only stored when set
+      return row;
+    });
   }
 
   /** Every Monarch account id referenced by the mappings (split chips resolve to their source). */
@@ -481,6 +494,12 @@
     if (mappings.length === 0) result.errors.push('No valid mappings in file.');
     for (const e of validateStructure(mappings)) if (!result.errors.includes(e)) result.errors.push(e);
 
+    rawMappings.forEach((m) => {
+      if (m && typeof m.title === 'string' && m.title.trim().length > TITLE_MAX) {
+        result.warnings.push(`The title "${m.title.trim().slice(0, 40)}…" was longer than ${TITLE_MAX} characters and was shortened.`);
+      }
+    });
+
     const meta = normalizeSplitMeta(rawSplits);
     for (const [id, v] of Object.entries(rawSplits)) {
       if (v && typeof v.note === 'string' && v.note.length > NOTE_MAX) {
@@ -496,6 +515,8 @@
   const api = {
     SPLIT_PREFIX,
     NOTE_MAX,
+    TITLE_MAX,
+    normalizeTitle,
     EXPORT_FORMAT,
     EXPORT_VERSION,
     SPLITTABLE_MONARCH_TYPES,

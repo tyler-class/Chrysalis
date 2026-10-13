@@ -1589,7 +1589,7 @@
       if (iVal !== jVal) return iVal - jVal;
       return a.localeCompare(b);
     });
-    let html = '<option value="">+ add Monarch account</option>';
+    let html = '<option value="">+ Add Monarch Account</option>';
     for (const cat of sortedCategories) {
       const accounts = byCategory.get(cat);
       html += `<optgroup label="${escapeHtml(displayNameForType(cat))}">`;
@@ -1599,6 +1599,433 @@
       html += '</optgroup>';
     }
     return html;
+  }
+
+  // ---------- lane rules (asset-with-loan rows) ----------
+  // The Loan lane takes Monarch liability accounts; the Asset value lane takes everything else.
+  // Used by both lanes' dropdowns and by drag-and-drop, so the two always agree. Accounts
+  // already mapped against these rules are left alone; they just can't be newly added.
+  const MONARCH_LIABILITY_TYPES = ['loan', 'credit', 'other_liability'];
+
+  function monarchTypeOf(sourceId) {
+    const acc = monarchAccounts.find((a) => a.id === sourceId);
+    return (acc && acc.type && String(acc.type).trim().toLowerCase()) || 'other_asset';
+  }
+
+  /** lane: 'main' (single-lane row), 'value' or 'loan' (asset-with-loan row). */
+  function laneAcceptsType(lane, type) {
+    const liability = MONARCH_LIABILITY_TYPES.includes(String(type || '').toLowerCase());
+    if (lane === 'loan') return liability;
+    if (lane === 'value') return !liability;
+    return true;
+  }
+
+  // ---------- drag and drop Monarch chips ----------
+  // Drag a chip to reorder it within its lane or move it to another lane (in the same row or
+  // another row). Only drops the dropdowns would also allow are accepted (see canDropChip).
+
+  let chipDrag = null; // { chip, fromMapping, fromLane }
+  let activeDropZone = null;
+  // The dashed chip-shaped placeholder where the dragged chip will land. It's a real flex item
+  // in the lane, so the chips around it move aside; it grows in and shrinks out so they slide.
+  let dropSlot = null; // { el, rowEl, index }
+  const DROP_SLOT_WIDTH = 90;
+  const DROP_SLOT_MIN_WIDTH = 40;
+  const DROP_SLOT_MS = 120;
+  const CHIP_GAP = 8; // matches .chips-row gap
+  const WHOLE_CHIP_HEIGHT = 32; // a whole-account chip; split chips are a little taller
+
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function retireDropSlot(el) {
+    if (!el) return;
+    el.classList.add('leaving');
+    if (reducedMotion() || typeof el.animate !== 'function') { el.remove(); return; }
+    const w = el.getBoundingClientRect().width;
+    el.animate(
+      [{ width: `${w}px`, marginRight: '0px', opacity: 1 }, { width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }],
+      { duration: DROP_SLOT_MS, easing: 'ease-out', fill: 'forwards' }
+    ).onfinish = () => el.remove();
+  }
+
+  /**
+   * Width for a just-inserted placeholder: up to DROP_SLOT_WIDTH, but only as wide as the room
+   * left on its line, so it doesn't push a chip onto a new line and make the row taller. It
+   * only wraps when less than DROP_SLOT_MIN_WIDTH is left. Measured with the placeholder at
+   * zero width and any shrinking-out placeholder hidden, all before the next paint.
+   */
+  function dropSlotWidth(el, rowEl) {
+    const leaving = Array.from(rowEl.querySelectorAll(':scope > .chip-drop-slot.leaving'));
+    leaving.forEach((n) => { n.style.display = 'none'; });
+    el.style.width = '0px';
+    const rowBox = rowEl.getBoundingClientRect();
+    const contentRight = rowBox.right - (parseFloat(getComputedStyle(rowEl).paddingRight) || 0);
+    const slotBox = el.getBoundingClientRect();
+    let lineRight = slotBox.right;
+    for (let n = el.nextElementSibling; n; n = n.nextElementSibling) {
+      if (n.style.display === 'none') continue;
+      const r = n.getBoundingClientRect();
+      if (r.top >= slotBox.bottom) break; // next line
+      lineRight = Math.max(lineRight, r.right);
+    }
+    leaving.forEach((n) => { n.style.display = ''; });
+    const free = Math.floor(contentRight - lineRight) - 1; // 1px spare: sub-pixel rounding could still wrap it
+    return free >= DROP_SLOT_MIN_WIDTH ? Math.min(DROP_SLOT_WIDTH, free) : DROP_SLOT_WIDTH;
+  }
+
+  /** Is the (zero-height) placeholder on the same line as at least one chip? */
+  function sharesLineWithChip(el, rowEl) {
+    const y = el.getBoundingClientRect().top; // its line's vertical center
+    return Array.from(rowEl.querySelectorAll(':scope > .chip-tag')).some((t) => {
+      const r = t.getBoundingClientRect();
+      return r.top <= y && r.bottom >= y;
+    });
+  }
+
+  /** Show the placeholder at `index` in a lane (no-op if it's already there). */
+  function placeDropSlot(rowEl, index) {
+    if (dropSlot && dropSlot.rowEl === rowEl && dropSlot.index === index) return;
+    if (dropSlot) retireDropSlot(dropSlot.el);
+    const el = document.createElement('div');
+    el.className = 'chip-drop-slot';
+    const tags = rowEl.querySelectorAll(':scope > .chip-tag');
+    // The placeholder itself has zero height (see .chip-drop-slot), so it can never change a
+    // line's height, not even by a rounded sub-pixel. Its dashed chip shape is drawn centered
+    // on it at the exact height of the chips it sits between; an empty lane uses a whole chip's.
+    const neighbor = tags[index] || tags[index - 1];
+    const height = neighbor ? neighbor.getBoundingClientRect().height : WHOLE_CHIP_HEIGHT;
+    el.style.setProperty('--slot-h', `${height}px`);
+    rowEl.insertBefore(el, tags[index] || null);
+    const width = dropSlotWidth(el, rowEl);
+    el.style.width = `${width}px`;
+    // Alone on its own line (no room left on the last one): take real height so the lane makes
+    // room for it, instead of a zero-height line that overlaps the chips and the Add field.
+    const ownLine = !sharesLineWithChip(el, rowEl);
+    el.classList.toggle('own-line', ownLine);
+    if (!reducedMotion() && typeof el.animate === 'function') {
+      el.animate(
+        ownLine
+          ? [{ opacity: 0 }, { opacity: 1 }] // growing its width would start it on the line above
+          : [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${width}px`, marginRight: '0px', opacity: 1 }],
+        { duration: DROP_SLOT_MS, easing: 'ease-out' }
+      );
+    }
+    dropSlot = { el, rowEl, index, height };
+  }
+
+  function laneArray(mapping, lane) {
+    if (lane === 'loan') {
+      if (!Array.isArray(mapping.monarchAccountsLoan)) mapping.monarchAccountsLoan = [];
+      return mapping.monarchAccountsLoan;
+    }
+    if (!Array.isArray(mapping.monarchAccounts)) mapping.monarchAccounts = [];
+    return mapping.monarchAccounts;
+  }
+
+  /** Can the chip being dragged be dropped into `lane` of `mapping`? */
+  function canDropChip(mapping, lane) {
+    if (!chipDrag) return false;
+    const { chip, fromMapping, fromLane } = chipDrag;
+    if (mapping === fromMapping && lane === fromLane) return true; // reorder
+    const sourceId = Model.sourceIdOf(chip);
+    const dual = isAssetWithLoanMapping(mapping);
+    if ((lane === 'main') === dual) return false; // lane doesn't match the row's layout
+    // The account can't already be in the target row (the dragged chip itself doesn't count).
+    const inRow = [...(mapping.monarchAccounts || []), ...(mapping.monarchAccountsLoan || [])]
+      .some((c) => c !== chip && Model.sourceIdOf(c) === sourceId);
+    if (inRow) return false;
+    if (Model.isSplitChip(chip)) return lane === 'main' && rowAcceptsSplit(mapping);
+    return laneAcceptsType(lane, monarchTypeOf(sourceId));
+  }
+
+  /** Index in the lane (counting real chips only) where a drop at (x, y) lands. */
+  function dropIndexAt(chipsRowEl, x, y) {
+    // While the pointer is over the placeholder, keep it where it is: the chips that just
+    // moved aside would otherwise flip the answer back and forth.
+    if (dropSlot && dropSlot.rowEl === chipsRowEl) {
+      const r = dropSlot.el.getBoundingClientRect();
+      const half = dropSlot.height / 2; // the drawn chip is centered on r (r may have zero height)
+      const cy = r.top + r.height / 2;
+      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= cy - half && y <= cy + half) return dropSlot.index;
+    }
+    const tags = Array.from(chipsRowEl.querySelectorAll(':scope > .chip-tag'));
+    for (let i = 0; i < tags.length; i++) {
+      const r = tags[i].getBoundingClientRect();
+      if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) return i;
+    }
+    return tags.length;
+  }
+
+  function clearChipDropIndicators() {
+    if (activeDropZone) activeDropZone.classList.remove('chip-drop-target');
+    activeDropZone = null;
+    if (dropSlot) retireDropSlot(dropSlot.el);
+    dropSlot = null;
+  }
+
+  /** Make a lane accept chip drops. zoneEl is the whole lane area; chipsRowEl holds its chips. */
+  function registerChipDropZone(zoneEl, chipsRowEl, mapping, lane) {
+    zoneEl.addEventListener('dragover', (e) => {
+      if (!chipDrag) return;
+      e.stopPropagation();
+      if (!canDropChip(mapping, lane)) {
+        e.dataTransfer.dropEffect = 'none';
+        clearChipDropIndicators();
+        return;
+      }
+      e.preventDefault(); // allow the drop
+      e.dataTransfer.dropEffect = 'move';
+      if (activeDropZone !== zoneEl) {
+        clearChipDropIndicators();
+        activeDropZone = zoneEl;
+        zoneEl.classList.add('chip-drop-target');
+      }
+      placeDropSlot(chipsRowEl, dropIndexAt(chipsRowEl, e.clientX, e.clientY));
+    });
+    zoneEl.addEventListener('drop', async (e) => {
+      if (!chipDrag || !canDropChip(mapping, lane)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Drop where the placeholder is shown, so what the user saw is what they get.
+      const index = dropSlot && dropSlot.rowEl === chipsRowEl ? dropSlot.index : dropIndexAt(chipsRowEl, e.clientX, e.clientY);
+      const { chip, fromMapping, fromLane } = chipDrag;
+      // The re-render below removes the dragged element, so its dragend may never fire.
+      chipDrag = null;
+      clearChipDropIndicators();
+      const from = laneArray(fromMapping, fromLane);
+      const to = laneArray(mapping, lane);
+      const fromIndex = from.indexOf(chip);
+      if (fromIndex === -1) return;
+      let insertAt = index;
+      if (from === to) {
+        if (insertAt === fromIndex || insertAt === fromIndex + 1) return; // dropped where it was
+        if (insertAt > fromIndex) insertAt -= 1;
+      }
+      from.splice(fromIndex, 1);
+      to.splice(insertAt, 0, chip);
+      if (Model.isSplitChip(chip)) touchSplit(Model.sourceIdOf(chip));
+      refreshMappingRows();
+      if (await persistMappings()) showRowSavedCheck(rowElByMapping.get(mapping));
+    });
+  }
+
+  // Dragging over anything that isn't a valid lane clears the indicators.
+  document.addEventListener('dragover', () => { if (chipDrag) clearChipDropIndicators(); });
+
+  const GRIP_SVG = '<svg viewBox="0 0 8 14" aria-hidden="true"><circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/></svg>';
+
+  /** Let a chip be dragged. Drags start anywhere except its inputs and buttons. */
+  function makeChipDraggable(tag, chip, mapping, lane) {
+    tag.classList.add('chip-draggable');
+    const grip = document.createElement('span');
+    grip.className = 'chip-grip';
+    grip.innerHTML = GRIP_SVG;
+    tag.insertBefore(grip, tag.firstChild);
+    // Only arm dragging on mousedown outside controls, so text in the % field stays selectable.
+    tag.addEventListener('mousedown', (e) => {
+      tag.draggable = !(e.target.closest && e.target.closest('input, button, textarea'));
+    });
+    tag.addEventListener('mouseup', () => { tag.draggable = false; });
+    tag.addEventListener('dragstart', (e) => {
+      chipDrag = { chip, fromMapping: mapping, fromLane: lane };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', chip.name || '');
+      hideNotePop();
+      hideTip();
+      // The browser snapshots the chip for the drag ghost first; fade the original after.
+      setTimeout(() => tag.classList.add('chip-dragging'), 0);
+    });
+    tag.addEventListener('dragend', () => {
+      chipDrag = null;
+      tag.draggable = false;
+      tag.classList.remove('chip-dragging');
+      clearChipDropIndicators();
+    });
+  }
+
+  /**
+   * Category header for a Monarch picker, with a right-aligned "Select All" that adds every
+   * account listed under it right now (already-selected accounts aren't listed, and a search
+   * narrows the list), as one change.
+   */
+  function monarchCategoryHeader(cat, accounts, onSelectAll) {
+    const header = document.createElement('div');
+    header.className = 'monarch-add-panel-header has-select-all';
+    const label = document.createElement('span');
+    label.textContent = displayNameForType(cat);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'select-all-btn';
+    btn.textContent = 'Select All';
+    btn.setAttribute('aria-label', `Add all ${accounts.length} ${displayNameForType(cat)} account${accounts.length === 1 ? '' : 's'}`);
+    btn.onmousedown = (e) => e.preventDefault(); // keep the search field focused
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      onSelectAll(accounts.map((a) => a.id));
+    };
+    header.appendChild(label);
+    if (accounts.length) header.appendChild(btn); // nothing left to add: no button
+    return header;
+  }
+
+  // ---------- Monarch account picker (multi-select) ----------
+  // One picker for normal rows and the Asset value / Loan lanes. While a picker is open (a
+  // "pick session"), clicking an account adds its chip right away and marks it with a check
+  // instead of removing it from the list; clicking a checked account removes the chip again.
+  // Adding re-renders the row, so the session (picked ids, search, scroll) lives here and the
+  // rebuilt picker reopens itself. Clicking outside or pressing Escape ends the session; the
+  // next time a picker opens, accounts already in the row aren't listed (as before).
+
+  let monarchPick = null; // { key, picked: Set<id>, query, scrollTop }
+
+  function endMonarchPick() {
+    if (!monarchPick) return;
+    const { key } = monarchPick;
+    monarchPick = null;
+    const widget = document.querySelector(`.monarch-add-widget[data-pick-key="${key}"]`);
+    if (!widget) return;
+    const panel = widget.querySelector('.monarch-add-panel');
+    const input = widget.querySelector('.add-dropdown-search');
+    if (panel) panel.style.display = 'none';
+    if (input) {
+      input.value = '';
+      if (document.activeElement === input) input.blur();
+    }
+  }
+
+  // mousedown (not click): the click that picks an account re-renders the row first.
+  document.addEventListener('mousedown', (e) => {
+    if (!monarchPick) return;
+    const widget = e.target.closest && e.target.closest('.monarch-add-widget[data-pick-key]');
+    if (widget && widget.dataset.pickKey === monarchPick.key) return;
+    endMonarchPick();
+  });
+
+  /**
+   * Build a Monarch picker for one lane, or null when there's nothing to add (and no session
+   * open on it). getOptions() lists addable accounts; addIds(ids) / removeId(id) change the row.
+   */
+  function buildMonarchPicker({ mapping, lane, getOptions, addIds, removeId }) {
+    const key = `${accountMappings.indexOf(mapping)}-${lane}`;
+    const session = monarchPick && monarchPick.key === key ? monarchPick : null;
+    if (!getOptions().length && !session) return null;
+
+    const widget = document.createElement('div');
+    widget.className = 'monarch-add-widget';
+    widget.dataset.pickKey = key;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'add-dropdown-search';
+    input.id = `monarch-pick-${key}`;
+    input.placeholder = '+ Add Monarch Account';
+    input.autocomplete = 'off';
+    const panel = document.createElement('div');
+    panel.className = 'monarch-add-panel';
+    panel.setAttribute('role', 'listbox');
+    panel.setAttribute('aria-multiselectable', 'true');
+
+    function startSession() {
+      if (monarchPick && monarchPick.key === key) return monarchPick;
+      endMonarchPick();
+      monarchPick = { key, picked: new Set(), query: '', scrollTop: 0 };
+      return monarchPick;
+    }
+
+    function pick(ids) {
+      const s = startSession();
+      const toAdd = ids.filter((id) => !s.picked.has(id));
+      if (!toAdd.length) return;
+      toAdd.forEach((id) => s.picked.add(id));
+      addIds(toAdd);
+    }
+
+    function unpick(id) {
+      const s = startSession();
+      s.picked.delete(id);
+      removeId(id);
+    }
+
+    function updatePanel() {
+      const picked = monarchPick && monarchPick.key === key ? monarchPick.picked : new Set();
+      const available = new Map(getOptions().map((a) => [a.id, a]));
+      // Accounts picked in this session stay listed (checked) in their usual place.
+      const list = monarchAccounts
+        .filter((a) => available.has(a.id) || picked.has(a.id))
+        .map((a) => available.get(a.id) || {
+          id: a.id, name: a.name, type: (a.type && String(a.type).trim()) || 'other_asset', remaining: null,
+        });
+      const query = input.value.trim();
+      const { sortedCategories, byCategory } = getFilteredGrouped(list, query);
+      panel.innerHTML = '';
+      for (const cat of sortedCategories) {
+        const items = byCategory.get(cat);
+        panel.appendChild(monarchCategoryHeader(cat, items.filter((a) => !picked.has(a.id)), pick));
+        for (const a of items) {
+          const isPicked = picked.has(a.id);
+          const opt = document.createElement('div');
+          opt.className = 'monarch-add-panel-option' + (isPicked ? ' is-picked' : '');
+          opt.textContent = a.name;
+          if (a.remaining != null && !isPicked) {
+            const meta = document.createElement('span');
+            meta.className = 'opt-split-meta';
+            meta.textContent = `Split · ${Model.formatPct(a.remaining)} left`;
+            opt.appendChild(meta);
+          }
+          if (isPicked) {
+            const check = document.createElement('span');
+            check.className = 'opt-check';
+            check.setAttribute('aria-hidden', 'true');
+            check.textContent = '✓';
+            opt.appendChild(check);
+          }
+          opt.setAttribute('data-id', a.id);
+          opt.setAttribute('role', 'option');
+          opt.setAttribute('aria-selected', isPicked ? 'true' : 'false');
+          opt.onmousedown = (e) => e.preventDefault(); // keep focus in the search field
+          opt.onclick = () => (isPicked ? unpick(a.id) : pick([a.id]));
+          panel.appendChild(opt);
+        }
+      }
+      panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
+    }
+
+    input.onfocus = () => {
+      startSession();
+      updatePanel();
+    };
+    input.oninput = () => {
+      startSession().query = input.value;
+      updatePanel();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Escape') endMonarchPick();
+    };
+    // Tabbing away ends the session; a blur caused by the row re-rendering doesn't.
+    input.addEventListener('blur', (e) => {
+      if (!input.isConnected || !monarchPick || monarchPick.key !== key) return;
+      if (e.relatedTarget && !widget.contains(e.relatedTarget)) endMonarchPick();
+    });
+    panel.addEventListener('scroll', () => {
+      if (monarchPick && monarchPick.key === key) monarchPick.scrollTop = panel.scrollTop;
+    });
+
+    widget.appendChild(input);
+    widget.appendChild(panel);
+    if (session) {
+      // Rebuilt mid-session: reopen as it was, once the row is back in the page.
+      input.value = session.query;
+      updatePanel();
+      queueMicrotask(() => {
+        if (!input.isConnected || monarchPick !== session) return;
+        if (document.activeElement !== input) input.focus();
+        panel.scrollTop = session.scrollTop;
+      });
+    } else {
+      panel.style.display = 'none';
+    }
+    return widget;
   }
 
   function addMappingRow(mapping) {
@@ -1628,6 +2055,7 @@
     cellArrow.className = 'map-arrow';
     const arrowSpan = document.createElement('span');
     cellArrow.appendChild(arrowSpan);
+    attachTip(arrowSpan, ICON_TIP_DELAY_MS); // text set in updateArrow (none when there's nothing to explain)
     function updateArrow() {
       const isDual = isAssetWithLoanMapping(mapping);
       const valueCount = mapping.monarchAccounts?.length || 0;
@@ -1637,17 +2065,23 @@
       arrowSpan.setAttribute('data-aggregate', multi ? '1' : '0');
       arrowSpan.textContent = multi ? '∑→' : '→';
       const labels = (mapping.monarchAccounts || []).map((c) => Model.chipLabel(c));
+      let tip = '';
       if (isDual) {
-        arrowSpan.title = multi ? 'Value and loan balances will be summed per field' : '';
+        tip = multi ? 'Value and loan balances will be summed per field' : '';
       } else if (multi) {
-        arrowSpan.title = `${mapping.plName || 'This account'} = ${labels.join(' + ')}`;
+        tip = `${mapping.plName || 'This account'} = ${labels.join(' + ')}`;
       } else {
-        arrowSpan.title = rowHasSplit(mapping) ? labels[0] : '';
+        tip = rowHasSplit(mapping) ? labels[0] : '';
       }
+      if (tip) arrowSpan.dataset.tip = tip;
+      else delete arrowSpan.dataset.tip;
     }
 
     const cellMonarch = document.createElement('td');
     cellMonarch.className = 'map-cell';
+    // Optional row title, in the gutter across the top of the row (positioned on the <tr>).
+    tr.classList.add('map-row');
+    cellMonarch.appendChild(buildRowTitle(mapping));
     const monarchCellWrap = document.createElement('div');
     const monarchNormalLayout = document.createElement('div');
     monarchNormalLayout.className = 'monarch-normal-layout';
@@ -1661,35 +2095,27 @@
       chipsRow.innerHTML = '';
       const mi = accountMappings.indexOf(mapping);
       (mapping.monarchAccounts || []).forEach((ma, ci) => {
-        chipsRow.appendChild(buildMonarchChip(mapping, ma, mi, ci, async () => {
+        const tag = buildMonarchChip(mapping, ma, mi, ci, async () => {
           selected.delete(Model.sourceIdOf(ma));
           mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a !== ma);
           if (Model.isSplitChip(ma)) touchSplit(Model.sourceIdOf(ma));
           refreshMappingRows();
           await persistMappings();
-        }));
+        });
+        makeChipDraggable(tag, ma, mapping, 'main');
+        chipsRow.appendChild(tag);
       });
       renderRowSplitMessages(mapping, splitMsgBox);
       addMonarchRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(selected, mapping);
-      if (unselected.length) {
-        const dropdownWrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addAccount(id) {
+      function addAccounts(ids) {
+        const options = getUnselectedMonarchIds(selected, mapping);
+        if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+        let added = 0;
+        for (const id of ids) {
           const acc = monarchAccounts.find((a) => a.id === id);
-          if (!acc) return;
-          const option = getUnselectedMonarchIds(selected, mapping).find((a) => a.id === id);
+          if (!acc || selected.has(id)) continue;
+          const option = options.find((a) => a.id === id);
           selected.add(id);
-          if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
           if (option && option.remaining != null) {
             // Already split elsewhere: add a share pre-filled with what's left.
             mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
@@ -1697,60 +2123,31 @@
           } else {
             mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
           }
-          refreshMappingRows();
-          autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
+          added++;
         }
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(selected, mapping);
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              if (a.remaining != null) {
-                const meta = document.createElement('span');
-                meta.className = 'opt-split-meta';
-                meta.textContent = `Split · ${Model.formatPct(a.remaining)} left`;
-                opt.appendChild(meta);
-              }
-              opt.setAttribute('data-id', a.id);
-              opt.setAttribute('role', 'option');
-              opt.onclick = () => addAccount(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => {
-          updatePanel();
-          setTimeout(() => {
-            document.addEventListener('click', function closePanel(ev) {
-              if (!widget.contains(ev.target)) {
-                panel.style.display = 'none';
-                document.removeEventListener('click', closePanel);
-              }
-            });
-          }, 0);
-        };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => {
-          if (e.key === 'Escape') {
-            panel.style.display = 'none';
-            input.blur();
-          }
-        };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        dropdownWrap.appendChild(widget);
+        if (!added) return;
+        refreshMappingRows();
+        autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
+      }
+      async function removeAccount(id) {
+        const removed = (mapping.monarchAccounts || []).filter((c) => Model.sourceIdOf(c) === id);
+        if (!removed.length) return;
+        mapping.monarchAccounts = mapping.monarchAccounts.filter((c) => Model.sourceIdOf(c) !== id);
+        selected.delete(id);
+        if (removed.some((c) => Model.isSplitChip(c))) touchSplit(id);
+        refreshMappingRows();
+        await persistMappings();
+      }
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'main',
+        getOptions: () => getUnselectedMonarchIds(selected, mapping),
+        addIds: addAccounts,
+        removeId: removeAccount,
+      });
+      if (picker) {
+        const dropdownWrap = document.createElement('span');
+        dropdownWrap.appendChild(picker);
         addMonarchRow.appendChild(dropdownWrap);
       }
     }
@@ -1760,6 +2157,7 @@
     monarchNormalLayout.appendChild(chipsRow);
     monarchNormalLayout.appendChild(splitMsgBox);
     monarchNormalLayout.appendChild(addMonarchRow);
+    registerChipDropZone(monarchNormalLayout, chipsRow, mapping, 'main');
 
     const monarchAssetWithLoanLayout = document.createElement('div');
     monarchAssetWithLoanLayout.className = 'monarch-asset-with-loan-layout';
@@ -1795,76 +2193,50 @@
     loanLane.appendChild(loanAddRow);
     monarchAssetWithLoanLayout.appendChild(valueLane);
     monarchAssetWithLoanLayout.appendChild(loanLane);
+    registerChipDropZone(valueLane, valueChipsRow, mapping, 'value');
+    registerChipDropZone(loanLane, loanChipsRow, mapping, 'loan');
 
     function renderValueLane() {
       valueChipsRow.innerHTML = '';
       (mapping.monarchAccounts || []).forEach((ma) => {
         const tag = document.createElement('span');
         tag.className = 'chip-tag';
-        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove" aria-label="Remove">×</button>`;
-        tag.querySelector('.remove').onclick = async () => {
+        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove">×</button>`;
+        setupChipRemoveButton(tag.querySelector('.remove'), ma.name, async () => {
           mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a.id !== ma.id);
           renderValueLane();
           renderLoanLane();
           await persistMappings();
-        };
+        });
+        makeChipDraggable(tag, ma, mapping, 'value');
         valueChipsRow.appendChild(tag);
       });
       valueAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
-      if (unselected.length) {
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'value',
+        getOptions: () => getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false })
+          .filter((a) => laneAcceptsType('value', a.type)),
+        addIds: (ids) => {
+          if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+          const inRow = getCombinedSelectedIds();
+          const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
+          if (!accs.length) return;
+          accs.forEach((acc) => mapping.monarchAccounts.push({ id: acc.id, name: acc.name }));
+          renderValueLane();
+          renderLoanLane();
+          autoSaveMappingsIfRowComplete(mapping, tr);
+        },
+        removeId: async (id) => {
+          mapping.monarchAccounts = (mapping.monarchAccounts || []).filter((a) => a.id !== id);
+          renderValueLane();
+          renderLoanLane();
+          await persistMappings();
+        },
+      });
+      if (picker) {
         const wrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addToValue(id) {
-          const acc = monarchAccounts.find((a) => a.id === id);
-          if (acc) {
-            if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
-            mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
-            input.value = '';
-            panel.style.display = 'none';
-            renderValueLane();
-            renderLoanLane();
-            autoSaveMappingsIfRowComplete(mapping, tr);
-          }
-        }
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              opt.setAttribute('data-id', a.id);
-              opt.onclick = () => addToValue(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => { updatePanel(); setTimeout(() => { document.addEventListener('click', function close(ev) { if (!widget.contains(ev.target)) { panel.style.display = 'none'; document.removeEventListener('click', close); } }); }, 0); };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => { if (e.key === 'Escape') { panel.style.display = 'none'; input.blur(); } };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        wrap.appendChild(widget);
+        wrap.appendChild(picker);
         valueAddRow.appendChild(wrap);
       }
       if (typeof updateArrow === 'function') updateArrow();
@@ -1874,70 +2246,42 @@
       (mapping.monarchAccountsLoan || []).forEach((ma) => {
         const tag = document.createElement('span');
         tag.className = 'chip-tag';
-        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove" aria-label="Remove">×</button>`;
-        tag.querySelector('.remove').onclick = async () => {
+        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove">×</button>`;
+        setupChipRemoveButton(tag.querySelector('.remove'), ma.name, async () => {
           mapping.monarchAccountsLoan = mapping.monarchAccountsLoan.filter((a) => a.id !== ma.id);
           renderValueLane();
           renderLoanLane();
           await persistMappings();
-        };
+        });
+        makeChipDraggable(tag, ma, mapping, 'loan');
         loanChipsRow.appendChild(tag);
       });
       loanAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
-      if (unselected.length) {
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'loan',
+        getOptions: () => getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false })
+          .filter((a) => laneAcceptsType('loan', a.type)),
+        addIds: (ids) => {
+          if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
+          const inRow = getCombinedSelectedIds();
+          const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
+          if (!accs.length) return;
+          accs.forEach((acc) => mapping.monarchAccountsLoan.push({ id: acc.id, name: acc.name }));
+          renderValueLane();
+          renderLoanLane();
+          autoSaveMappingsIfRowComplete(mapping, tr);
+        },
+        removeId: async (id) => {
+          mapping.monarchAccountsLoan = (mapping.monarchAccountsLoan || []).filter((a) => a.id !== id);
+          renderValueLane();
+          renderLoanLane();
+          await persistMappings();
+        },
+      });
+      if (picker) {
         const wrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ add Monarch account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addToLoan(id) {
-          const acc = monarchAccounts.find((a) => a.id === id);
-          if (acc) {
-            if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
-            mapping.monarchAccountsLoan.push({ id: acc.id, name: acc.name });
-            input.value = '';
-            panel.style.display = 'none';
-            renderValueLane();
-            renderLoanLane();
-            autoSaveMappingsIfRowComplete(mapping, tr);
-          }
-        }
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              opt.setAttribute('data-id', a.id);
-              opt.onclick = () => addToLoan(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => { updatePanel(); setTimeout(() => { document.addEventListener('click', function close(ev) { if (!widget.contains(ev.target)) { panel.style.display = 'none'; document.removeEventListener('click', close); } }); }, 0); };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => { if (e.key === 'Escape') { panel.style.display = 'none'; input.blur(); } };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        wrap.appendChild(widget);
+        wrap.appendChild(picker);
         loanAddRow.appendChild(wrap);
       }
       if (typeof updateArrow === 'function') updateArrow();
@@ -1971,7 +2315,7 @@
     const plInput = document.createElement('input');
     plInput.type = 'text';
     plInput.className = 'add-dropdown-search';
-    plInput.placeholder = 'Select ProjectionLab account';
+    plInput.placeholder = '+ Add ProjectionLab Account';
     plInput.autocomplete = 'off';
     plInput.readOnly = true;
     const plPanel = document.createElement('div');
@@ -1983,9 +2327,15 @@
         plInput.placeholder = '';
       } else {
         plInput.value = '';
-        plInput.placeholder = 'Select ProjectionLab account';
+        plInput.placeholder = '+ Add ProjectionLab Account';
       }
+      // Once an account is chosen the field is inert; clear it with × to pick another.
+      plInput.classList.toggle('is-locked', !!mapping.plId);
     }
+    // A click on a chosen account does nothing: no focus, no list (see updatePLInputLabel).
+    plInput.addEventListener('mousedown', (e) => {
+      if (mapping.plId) e.preventDefault();
+    });
     function updatePLPanel() {
       const query = plInput === document.activeElement ? plInput.value.trim() : '';
       const { sortedCategories, byCategory } = getFilteredGroupedPL(query, mapping);
@@ -2023,6 +2373,7 @@
       plPanel.style.display = 'none';
     }
     plInput.onfocus = () => {
+      if (mapping.plId) return; // chosen: inert until cleared with ×
       plInput.readOnly = false;
       plInput.value = '';
       updatePLClearVisibility();
@@ -2058,16 +2409,20 @@
     plClearBtn.innerHTML = '×';
     plClearBtn.setAttribute('aria-label', 'Clear selection');
     plClearBtn.hidden = true;
+    attachTip(plClearBtn, ICON_TIP_DELAY_MS);
     function updatePLClearVisibility() {
       const showSearch = !plInput.readOnly && plInput.value.length > 0;
       const showSelection = !!(plInput.readOnly && mapping.plId);
       const show = showSearch || showSelection;
       plClearBtn.hidden = !show;
-      plClearBtn.setAttribute('aria-label', showSelection ? 'Clear ProjectionLab account' : 'Clear search');
+      const label = showSelection ? 'Remove selected ProjectionLab account' : 'Clear search';
+      plClearBtn.setAttribute('aria-label', label);
+      plClearBtn.dataset.tip = label;
       plInput.classList.toggle('has-clear', show);
     }
     plClearBtn.onclick = async (e) => {
       e.preventDefault();
+      hideTip();
       if (mapping.plId) {
         mapping.plId = '';
         mapping.plName = '';
@@ -2130,14 +2485,23 @@
     removeBtn.type = 'button';
     removeBtn.className = 'remove-row';
     removeBtn.innerHTML = '×';
-    removeBtn.title = 'Remove row';
+    removeBtn.dataset.tip = 'Remove row';
+    removeBtn.setAttribute('aria-label', 'Remove row');
+    attachTip(removeBtn, ICON_TIP_DELAY_MS);
     removeBtn.onclick = async () => {
+      hideTip(); // the button is about to be removed with its row
       const idx = accountMappings.indexOf(mapping);
       if (idx !== -1) accountMappings.splice(idx, 1);
-      tr.remove();
+      refreshMappingRows(); // redraw so the swap buttons between rows stay correct
       await persistMappings();
     };
     cellRemove.appendChild(removeBtn);
+    // "Swap rows": sits where this row's bottom divider meets the table's right border and swaps
+    // this row with the one below.
+    const rowIndex = accountMappings.indexOf(mapping);
+    if (rowIndex !== -1 && rowIndex < accountMappings.length - 1) {
+      cellRemove.appendChild(buildRowSwapButton(rowIndex));
+    }
     tr.appendChild(cellRemove);
 
     tbody.appendChild(tr);
@@ -2284,7 +2648,8 @@
     input.value = chip._raw != null ? chip._raw : (chip.pct == null ? '' : String(chip.pct));
     const rawInvalid = chip._raw != null && Model.parsePct(chip._raw) === null;
     if (rawInvalid || state === 'over' || state === 'invalid') input.classList.add('err');
-    if (rawInvalid) input.title = 'Enter a number from 0 to 100';
+    if (rawInvalid) input.dataset.tip = 'Enter a number from 0 to 100';
+    attachTip(input, ICON_TIP_DELAY_MS); // shows only while the entry is invalid (data-tip set)
     input.setAttribute('aria-label', ariaLabel);
     input.addEventListener('input', () => onShareInput(chip, input.value));
     input.placeholder = '0';
@@ -2296,7 +2661,7 @@
       if (chip.pct != null && input.value !== String(chip.pct)) {
         input.value = String(chip.pct);
         // Clear only the "not a number" marking (it sets the title); over-100% stays red.
-        if (input.title) { input.classList.remove('err'); input.removeAttribute('title'); }
+        if (input.dataset.tip) { input.classList.remove('err'); delete input.dataset.tip; hideTip(); }
       }
     });
     return input;
@@ -2353,11 +2718,13 @@
       const isOpenNow = () => !!(splitPanel && splitPanel.sourceId === sourceId && splitPanel.anchor === mapping);
       btn.setAttribute('aria-expanded', isOpenNow() ? 'true' : 'false');
       btn.setAttribute('aria-haspopup', 'dialog');
-      btn.title = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
+      btn.dataset.tip = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
+      attachTip(btn, ICON_TIP_DELAY_MS);
       btn.setAttribute('aria-label', (Model.isSplitChip(chip) ? 'Edit split of ' : 'Split ') + chip.name);
       btn.innerHTML = SPLIT_ICON_SVG;
       btn.onclick = async (e) => {
         e.stopPropagation();
+        hideTip();
         if (isOpenNow()) { closeSplitPanel(); return; }
         if (!Model.isSplitChip(chip)) {
           // Start a split: this row keeps 100% until the user adds shares elsewhere.
@@ -2376,9 +2743,8 @@
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'remove';
-    remove.setAttribute('aria-label', `Remove ${chip.name}`);
     remove.textContent = '×';
-    remove.onclick = onRemove;
+    setupChipRemoveButton(remove, chip.name, onRemove);
     tag.appendChild(remove);
     return tag;
   }
@@ -2469,17 +2835,50 @@
     placeFloating(tipEl, anchor.getBoundingClientRect(), 6, 0);
   }
 
+  let tipDelayTimer = null;
+
   function hideTip() {
+    if (tipDelayTimer) { clearTimeout(tipDelayTimer); tipDelayTimer = null; }
     tipEl.hidden = true;
   }
 
-  function attachTip(node) {
+  const REMOVE_MONARCH_TIP = 'Remove selected Monarch Money account';
+  // Icon buttons (×, swap, split, …) wait a moment before showing their tip, so it doesn't flash
+  // while aiming to click. Warnings that need attention (amber pill, Map Accounts icon) show at once.
+  const ICON_TIP_DELAY_MS = 1500;
+
+  /** A chip's × button: styled hover tip, an accessible name, and the tip hidden on click. */
+  function setupChipRemoveButton(btn, accountName, onRemove) {
+    btn.dataset.tip = REMOVE_MONARCH_TIP;
+    btn.setAttribute('aria-label', `Remove ${accountName}`);
+    attachTip(btn, ICON_TIP_DELAY_MS);
+    btn.onclick = (e) => {
+      hideTip(); // the chip (and this button) is about to be removed
+      return onRemove(e);
+    };
+  }
+
+  /** Show node's data-tip on hover: right away, or after delayMs (e.g. for × buttons). */
+  function attachTip(node, delayMs) {
     if (!node) return;
-    node.addEventListener('mouseenter', () => showTip(node));
-    node.addEventListener('mouseleave', hideTip);
+    let hovering = false;
+    node.addEventListener('mouseenter', () => {
+      hovering = true;
+      if (!delayMs) { showTip(node); return; }
+      if (tipDelayTimer) clearTimeout(tipDelayTimer);
+      tipDelayTimer = setTimeout(() => {
+        tipDelayTimer = null;
+        if (hovering && node.isConnected) showTip(node);
+      }, delayMs);
+    });
+    node.addEventListener('mouseleave', () => {
+      hovering = false;
+      hideTip();
+    });
   }
 
   attachTip(document.getElementById('chip-maps'));
+  attachTip(document.querySelector('.header-links .help-icon-link'), ICON_TIP_DELAY_MS);
   attachTip(document.querySelector('#step3 .step-num'));
   window.addEventListener('scroll', hideTip, true);
 
@@ -3237,9 +3636,168 @@
   document.getElementById('add-row').onclick = () => {
     const mapping = { plId: '', plName: '', plType: '', plNativeType: '', monarchAccounts: [], monarchAccountsLoan: [] };
     accountMappings.push(mapping);
-    const tbody = document.getElementById('map-tbody');
-    addMappingRow(mapping);
+    refreshMappingRows(); // redraw so the previous last row gets its swap button
   };
+
+  // ---------- row title ----------
+  // An optional label for a row, written by the user (no automatic title). It lives in the gutter
+  // across the top of the row: blank until hovered, when a pencil appears; with a title, the
+  // title shows there. Saved with the row (Model.TITLE_MAX characters) and kept in backups.
+  const PENCIL_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  let titleEdit = null; // { mapping, draft } while a title is being edited (survives re-renders)
+
+  function buildRowTitle(mapping) {
+    const gutter = document.createElement('div');
+    gutter.className = 'row-title';
+    const editing = titleEdit && titleEdit.mapping === mapping;
+
+    if (editing) {
+      gutter.classList.add('is-editing');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'row-title-input';
+      input.id = `row-title-${accountMappings.indexOf(mapping)}`;
+      input.maxLength = Model.TITLE_MAX;
+      input.placeholder = 'Title (Optional)';
+      input.autocomplete = 'off';
+      input.setAttribute('aria-label', 'Row title');
+      input.value = titleEdit.draft;
+      input.addEventListener('input', () => {
+        if (titleEdit) titleEdit.draft = input.value;
+        sizeTitleInput(input);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finishTitleEdit(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishTitleEdit(false); }
+      });
+      input.addEventListener('blur', () => {
+        if (renderingRows || !input.isConnected) return; // a re-render, not the user leaving
+        finishTitleEdit(true);
+      });
+      gutter.appendChild(input);
+      queueMicrotask(() => {
+        if (!input.isConnected) return;
+        sizeTitleInput(input);
+        if (document.activeElement === input) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+      return gutter;
+    }
+
+    const title = mapping.title || '';
+    if (title) {
+      const text = document.createElement('span');
+      text.className = 'row-title-text';
+      text.textContent = title;
+      gutter.appendChild(text);
+      // Full title in a tip only when it's cut off.
+      queueMicrotask(() => {
+        if (text.isConnected && text.scrollWidth > text.clientWidth) {
+          text.dataset.tip = title;
+          attachTip(text);
+        }
+      });
+    }
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'row-title-edit';
+    edit.innerHTML = PENCIL_ICON_SVG;
+    const label = title ? 'Edit title' : 'Add a title';
+    edit.setAttribute('aria-label', label);
+    edit.dataset.tip = label;
+    attachTip(edit, ICON_TIP_DELAY_MS);
+    edit.onclick = (e) => {
+      e.stopPropagation();
+      hideTip();
+      titleEdit = { mapping, draft: title };
+      refreshMappingRows();
+    };
+    gutter.appendChild(edit);
+    return gutter;
+  }
+
+  const TITLE_INPUT_MIN_WIDTH = 400;
+
+  /** The title box starts 400px wide and grows with its text, up to the row's width. */
+  function sizeTitleInput(input) {
+    const gutter = input.parentElement;
+    if (!gutter) return;
+    const cs = getComputedStyle(input);
+    const ctx = (sizeTitleInput.canvas || (sizeTitleInput.canvas = document.createElement('canvas'))).getContext('2d');
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const text = input.value || input.placeholder;
+    const chrome = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
+      + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0) + 4; // + caret room
+    const max = gutter.clientWidth;
+    const want = Math.ceil(ctx.measureText(text).width + chrome);
+    input.style.width = `${Math.min(max, Math.max(TITLE_INPUT_MIN_WIDTH, want))}px`;
+  }
+
+  async function finishTitleEdit(save) {
+    if (!titleEdit) return;
+    const { mapping, draft } = titleEdit;
+    titleEdit = null;
+    const changed = save && Model.normalizeTitle(draft) !== (mapping.title || '');
+    if (changed) mapping.title = Model.normalizeTitle(draft);
+    refreshMappingRows();
+    if (changed) {
+      if (await persistMappings()) showRowSavedCheck(rowElByMapping.get(mapping));
+    }
+  }
+
+  // ---------- swap rows ----------
+  // A ⇅ button on the divider between two rows (at the table's right border) swaps them. The row
+  // order is the saved order of the mappings, so it persists and is kept in backups.
+  const SWAP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 20V4M4 8l4-4 4 4M16 4v16M12 16l4 4 4-4"/></svg>';
+  const ROW_SWAP_MS = 200;
+
+  function rowLabel(m) {
+    return (m && (m.title || m.plName)) || 'unnamed';
+  }
+
+  function buildRowSwapButton(index) {
+    const above = accountMappings[index];
+    const below = accountMappings[index + 1];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'row-swap';
+    btn.id = `row-swap-${index}`;
+    btn.innerHTML = SWAP_ICON_SVG;
+    const label = `Swap the "${rowLabel(above)}" and "${rowLabel(below)}" rows`;
+    btn.setAttribute('aria-label', label);
+    btn.dataset.tip = label;
+    attachTip(btn, ICON_TIP_DELAY_MS);
+    btn.onclick = () => swapRows(index);
+    return btn;
+  }
+
+  async function swapRows(index) {
+    const a = accountMappings[index];
+    const b = accountMappings[index + 1];
+    if (!a || !b) return;
+    hideTip();
+    endMonarchPick();
+    closeSplitPanel();
+    const topBefore = new Map([a, b].map((m) => {
+      const tr = rowElByMapping.get(m);
+      return [m, tr ? tr.getBoundingClientRect().top : null];
+    }));
+    accountMappings[index] = b;
+    accountMappings[index + 1] = a;
+    refreshMappingRows(); // keeps focus on this swap button (same id), so a second click swaps back
+    // Slide the two rows from where they were to where they are now, then highlight them.
+    for (const m of [a, b]) {
+      const tr = rowElByMapping.get(m);
+      if (!tr) continue;
+      tr.classList.add('row-flash');
+      const from = topBefore.get(m);
+      if (from == null || reducedMotion() || typeof tr.animate !== 'function') continue;
+      const dy = from - tr.getBoundingClientRect().top;
+      if (dy) tr.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: ROW_SWAP_MS, easing: 'ease-out' });
+    }
+    await persistMappings();
+  }
 
   function showRowSavedCheck(tr) {
     if (!tr) return;
@@ -3288,11 +3846,11 @@
     if (await persistMappings()) showRowSavedCheck(tr);
   }
 
-  // ---------- section hover lift ----------
+  // ---------- section hover shadow ----------
   // Popovers live on <body> (so cards can't clip them), which makes moving onto one count as
   // leaving its card. Each popover root has class floating-owned and an _ownerCard; while the
-  // pointer is over a card or any popover it owns, that card keeps the .hover-lift style.
-  let liftedCard = null;
+  // pointer is over a card or any popover it owns, that card keeps its hover shadow.
+  let hoveredCard = null;
   document.addEventListener('mouseover', (e) => {
     const t = e.target;
     let card = t && t.closest ? t.closest('.step-card') : null;
@@ -3300,15 +3858,47 @@
       const floating = t.closest('.floating-owned');
       card = (floating && floating._ownerCard) || null;
     }
-    if (card === liftedCard) return;
-    if (liftedCard) liftedCard.classList.remove('hover-lift');
-    liftedCard = card;
-    if (card) card.classList.add('hover-lift');
+    if (card === hoveredCard) return;
+    if (hoveredCard) hoveredCard.classList.remove('is-hovered');
+    hoveredCard = card;
+    if (card) card.classList.add('is-hovered');
   });
   document.documentElement.addEventListener('mouseleave', () => {
-    if (liftedCard) liftedCard.classList.remove('hover-lift');
-    liftedCard = null;
+    if (hoveredCard) hoveredCard.classList.remove('is-hovered');
+    hoveredCard = null;
   });
+
+  // ---------- mapping-table pickers: open above when there's no room below ----------
+  // The Monarch / Asset value / Loan / ProjectionLab pickers in the table are positioned just
+  // under their field by CSS. Whenever one is shown or changes size, check the room below it:
+  // flip it above the field if it fits there, otherwise keep the roomier side and shrink it so
+  // it scrolls instead of running off the window. Writes only when something changes, so the
+  // observer below can't loop on its own edits.
+  const ROW_PICKER_MAX_H = 240; // matches .monarch-add-panel max-height
+  const ROW_PICKER_GAP = 4; // matches .monarch-add-panel margin
+
+  function fitRowPicker(panel) {
+    if (panel.style.display !== 'block' || !panel.parentElement) return;
+    const field = panel.parentElement.getBoundingClientRect();
+    const h = Math.min(panel.scrollHeight + 2, ROW_PICKER_MAX_H); // + borders
+    const below = window.innerHeight - field.bottom - ROW_PICKER_GAP - FLOAT_EDGE_Y;
+    const above = field.top - ROW_PICKER_GAP - FLOAT_EDGE_Y;
+    const up = h > below && (h <= above || above > below);
+    const room = Math.max(80, Math.floor(up ? above : below));
+    const maxH = h > room ? `${room}px` : '';
+    if (panel.classList.contains('open-up') !== up) panel.classList.toggle('open-up', up);
+    if (panel.style.maxHeight !== maxH) panel.style.maxHeight = maxH;
+  }
+
+  function fitOpenRowPickers() {
+    document.querySelectorAll('#map-tbody .monarch-add-panel').forEach(fitRowPicker);
+  }
+
+  new MutationObserver(fitOpenRowPickers).observe(document.getElementById('map-tbody'), {
+    subtree: true, childList: true, attributes: true, attributeFilter: ['style'],
+  });
+  window.addEventListener('scroll', fitOpenRowPickers, true);
+  window.addEventListener('resize', fitOpenRowPickers);
 
   setupStepToggles();
   setupReadyPillHelp();

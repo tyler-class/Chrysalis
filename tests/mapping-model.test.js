@@ -225,3 +225,24 @@ test('unbalancedSplits lists split accounts that are not at 100% (and nothing el
   assert.equal(M.describeUnbalancedSplit(M.unbalancedSplits(under)[0]), 'Fidelity 401(k) is at 95%');
   assert.equal(M.describeUnbalancedSplit(M.unbalancedSplits(missing)[0]), 'Fidelity 401(k) has a share with no percentage');
 });
+
+test('row titles: optional, trimmed, capped, saved only when set, and kept in backups', () => {
+  const rows = couple();
+  rows[0].title = '  All my brokerage  ';
+  rows[1].title = 'x'.repeat(300);
+  const saved = M.serializeMappings(rows);
+  assert.equal(saved[0].title, 'All my brokerage');
+  assert.equal(saved[1].title.length, M.TITLE_MAX);
+  assert.ok(!('title' in saved[2]), 'untitled rows store no title field');
+  assert.equal(M.normalizeMappings(saved)[0].title, 'All my brokerage');
+  assert.equal(M.normalizeMappings(saved)[2].title, '');
+  const file = M.buildExport(rows, {});
+  const back = M.parseImport(JSON.parse(JSON.stringify(file)));
+  assert.deepEqual(back.errors, []);
+  assert.equal(back.mappings[0].title, 'All my brokerage');
+  const long = M.buildExport(couple(), {});
+  long.mappings[0].title = 'y'.repeat(260);
+  const back2 = M.parseImport(long);
+  assert.equal(back2.mappings[0].title.length, M.TITLE_MAX);
+  assert.match(back2.warnings.join(' '), /longer than 250 characters/);
+});
