@@ -1682,10 +1682,12 @@
     const el = document.createElement('div');
     el.className = 'chip-drop-slot';
     const tags = rowEl.querySelectorAll(':scope > .chip-tag');
-    // Match the chips it sits between (whole and split chips differ by a few px), so the
-    // placeholder never makes its line taller. An empty lane gets a whole chip's height.
+    // The placeholder itself has zero height (see .chip-drop-slot), so it can never change a
+    // line's height, not even by a rounded sub-pixel. Its dashed chip shape is drawn centered
+    // on it at the exact height of the chips it sits between; an empty lane uses a whole chip's.
     const neighbor = tags[index] || tags[index - 1];
-    el.style.height = `${neighbor ? neighbor.offsetHeight : WHOLE_CHIP_HEIGHT}px`;
+    const height = neighbor ? neighbor.getBoundingClientRect().height : WHOLE_CHIP_HEIGHT;
+    el.style.setProperty('--slot-h', `${height}px`);
     rowEl.insertBefore(el, tags[index] || null);
     const width = dropSlotWidth(el, rowEl);
     el.style.width = `${width}px`;
@@ -1695,7 +1697,7 @@
         { duration: DROP_SLOT_MS, easing: 'ease-out' }
       );
     }
-    dropSlot = { el, rowEl, index };
+    dropSlot = { el, rowEl, index, height };
   }
 
   function laneArray(mapping, lane) {
@@ -1729,7 +1731,8 @@
     // moved aside would otherwise flip the answer back and forth.
     if (dropSlot && dropSlot.rowEl === chipsRowEl) {
       const r = dropSlot.el.getBoundingClientRect();
-      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= r.top && y <= r.bottom) return dropSlot.index;
+      const half = dropSlot.height / 2; // r has zero height; the drawn chip is centered on it
+      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= r.top - half && y <= r.top + half) return dropSlot.index;
     }
     const tags = Array.from(chipsRowEl.querySelectorAll(':scope > .chip-tag'));
     for (let i = 0; i < tags.length; i++) {

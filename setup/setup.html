@@ -532,10 +532,16 @@
     .chip-tag.chip-dragging .chip-grip { opacity: 0; }
     .chip-drop-target { outline: 2px dashed rgba(239,108,43,.6); outline-offset: 4px; border-radius: 10px; }
     /* Where the dragged chip will land: a dashed chip of the same height and corner radius. */
+    /* Zero height so it never changes a line's height; it only takes width (so chips move
+       aside). The dashed chip shape is drawn centered on it at --slot-h (setup.js placeDropSlot). */
     .chip-drop-slot {
-      flex: 0 0 auto; box-sizing: border-box; width: 90px;
-      border: 1.5px dashed var(--monarch); border-radius: 8px; background: rgba(239,108,43,.06);
+      flex: 0 0 auto; position: relative; align-self: center; width: 90px; height: 0;
       pointer-events: none;
+    }
+    .chip-drop-slot::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--slot-h, 32px);
+      transform: translateY(-50%); box-sizing: border-box;
+      border: 1.5px dashed var(--monarch); border-radius: 8px; background: rgba(239,108,43,.06);
     }
     .chip-tag .remove:hover { color: var(--red); opacity: 1; }
     .add-dropdown {
