@@ -440,9 +440,12 @@
       min-width: 640px; /* below this the Monarch column gets too narrow for its chips */
     }
     .map-table col.col-w-arrow { width: 48px; }
-    .map-table col.col-w-pl { width: 38%; } /* ≈334px at the page's full width; scales down on narrow windows */
-    .map-table col.col-w-saved { width: 36px; }
-    .map-table col.col-w-remove { width: 52px; }
+    /* ProjectionLab column: 28.8% makes the field 239px at the page's full width (885px table)
+       and scales it down on narrow windows. (Chrome ignores calc() widths on <col>.) The
+       Monarch column takes all the rest. */
+    .map-table col.col-w-pl { width: 28.8%; }
+    .map-table col.col-w-saved { width: 22px; }
+    .map-table col.col-w-remove { width: 36px; }
     .map-table th {
       text-align: left;
       padding: 12px 14px;
@@ -461,16 +464,17 @@
     .map-table th.col-pl {
       font-size: 12px; /* slightly larger than the 11px base */
     }
-    .map-table th.col-remove { width: 44px; text-align: center; }
-    .map-table th.col-pl { min-width: 300px; padding-left: 28px; }
+    .map-table th.col-remove { text-align: center; }
+    .map-table th.col-pl { padding-left: 10px; }
     .map-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
     .map-table tr:last-child td { border-bottom: none; }
-    .map-table td.col-remove { text-align: center; }
+    .map-table td.col-remove { text-align: center; padding-left: 0; padding-right: 0; }
     /* Sits beside the ProjectionLab picker (first line of the row), not the row's middle. */
     .map-table td.col-saved { text-align: left; vertical-align: top; padding-left: 0; padding-right: 0; }
     .row-saved-check { color: var(--good); font-weight: 600; font-size: 14px; line-height: 32px; } /* = ProjectionLab picker height */
     .map-cell { min-width: 200px; }
-    .map-cell.map-cell-pl { min-width: 300px; padding-left: 28px; }
+    /* Close to the arrow on the left, close to the save ✓ and row × on the right. */
+    .map-cell.map-cell-pl { padding-left: 10px; padding-right: 6px; }
     .map-cell-pl .monarch-add-widget { width: 100%; max-width: 100%; min-width: 0; }
     .map-cell-pl .add-dropdown-search { min-width: 0; }
     .map-arrow {
@@ -481,8 +485,9 @@
       white-space: nowrap;
     }
     .map-arrow[data-aggregate] { cursor: help; }
-    /* Centered in its fixed 48px column; no side padding so the ∑→ arrow fits. */
-    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; }
+    /* Centered in its fixed 48px column (no side padding so the ∑→ arrow fits). The 32px line
+       box matches the ProjectionLab field, so the arrow lines up with the field's center. */
+    .map-table td.map-arrow { padding-left: 0; padding-right: 0; text-align: center; line-height: 32px; }
     .chips-row {
       display: flex;
       flex-wrap: wrap;
@@ -1270,7 +1275,7 @@
             <th>Monarch Accounts (select one or more)</th>
             <th class="map-arrow-col"></th>
             <th class="col-pl">ProjectionLab Account</th>
-            <th class="col-saved" style="width:36px;text-align:center"></th>
+            <th class="col-saved" style="text-align:center"></th>
             <th class="col-remove"></th>
           </tr>
         </thead>
