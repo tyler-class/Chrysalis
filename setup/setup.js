@@ -3510,6 +3510,38 @@
     liftedCard = null;
   });
 
+  // ---------- mapping-table pickers: open above when there's no room below ----------
+  // The Monarch / Asset value / Loan / ProjectionLab pickers in the table are positioned just
+  // under their field by CSS. Whenever one is shown or changes size, check the room below it:
+  // flip it above the field if it fits there, otherwise keep the roomier side and shrink it so
+  // it scrolls instead of running off the window. Writes only when something changes, so the
+  // observer below can't loop on its own edits.
+  const ROW_PICKER_MAX_H = 240; // matches .monarch-add-panel max-height
+  const ROW_PICKER_GAP = 4; // matches .monarch-add-panel margin
+
+  function fitRowPicker(panel) {
+    if (panel.style.display !== 'block' || !panel.parentElement) return;
+    const field = panel.parentElement.getBoundingClientRect();
+    const h = Math.min(panel.scrollHeight + 2, ROW_PICKER_MAX_H); // + borders
+    const below = window.innerHeight - field.bottom - ROW_PICKER_GAP - FLOAT_EDGE_Y;
+    const above = field.top - ROW_PICKER_GAP - FLOAT_EDGE_Y;
+    const up = h > below && (h <= above || above > below);
+    const room = Math.max(80, Math.floor(up ? above : below));
+    const maxH = h > room ? `${room}px` : '';
+    if (panel.classList.contains('open-up') !== up) panel.classList.toggle('open-up', up);
+    if (panel.style.maxHeight !== maxH) panel.style.maxHeight = maxH;
+  }
+
+  function fitOpenRowPickers() {
+    document.querySelectorAll('#map-tbody .monarch-add-panel').forEach(fitRowPicker);
+  }
+
+  new MutationObserver(fitOpenRowPickers).observe(document.getElementById('map-tbody'), {
+    subtree: true, childList: true, attributes: true, attributeFilter: ['style'],
+  });
+  window.addEventListener('scroll', fitOpenRowPickers, true);
+  window.addEventListener('resize', fitOpenRowPickers);
+
   setupStepToggles();
   setupReadyPillHelp();
   setupAdvancedSection();

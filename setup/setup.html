@@ -550,7 +550,10 @@
       cursor: pointer;
     }
     .add-dropdown:hover { border-color: var(--primary); color: var(--ink); }
-    .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; }
+    /* The field's usual 10px bottom margin lives on the widget instead, so a picker opening
+       below sits 4px from the field (like "Add a split to…") while the layout stays the same. */
+    .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; margin-bottom: 10px; }
+    .monarch-add-widget .add-dropdown-search { margin-bottom: 0; }
     .add-dropdown-search {
       font-family: inherit;
       font-size: 12px;
@@ -635,6 +638,8 @@
       box-shadow: var(--shadow-lg);
       z-index: 1000;
     }
+    /* Not enough room below (setup.js fitRowPicker): open above the field instead. */
+    .monarch-add-panel.open-up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
     .monarch-add-panel-header {
       font-weight: 700;
       font-size: 11px;
