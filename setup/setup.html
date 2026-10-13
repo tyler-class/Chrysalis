@@ -517,6 +517,26 @@
       border: 1px solid var(--monarch);
     }
     .chip-tag .remove { background: none; border: none; color: var(--monarch-pill-ink); opacity: 0.7; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; border-radius: 4px; }
+    /* Drag and drop (setup.js makeChipDraggable / registerChipDropZone). The grip sits in the
+       chip's left padding and fades in on hover, so the chip never changes size. */
+    /* translate(0, 0) gives each chip its own layer, so Chrome's drag ghost keeps the rounded
+       corners instead of filling the rectangle around them with white. */
+    .chip-tag.chip-draggable { position: relative; padding-left: 15px; cursor: grab; transform: translate(0, 0); }
+    .chip-grip {
+      position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      display: flex; color: var(--monarch-pill-ink); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+    }
+    .chip-grip svg { width: 6px; height: 11px; display: block; fill: currentColor; }
+    .chip-tag.chip-draggable:hover .chip-grip { opacity: 0.55; }
+    .chip-tag.chip-dragging { opacity: 0.35; }
+    .chip-tag.chip-dragging .chip-grip { opacity: 0; }
+    .chip-drop-target { outline: 2px dashed rgba(239,108,43,.6); outline-offset: 4px; border-radius: 10px; }
+    /* Where the dragged chip will land: a dashed chip of the same height and corner radius. */
+    .chip-drop-slot {
+      flex: 0 0 auto; box-sizing: border-box; width: 90px;
+      border: 1.5px dashed var(--monarch); border-radius: 8px; background: rgba(239,108,43,.06);
+      pointer-events: none;
+    }
     .chip-tag .remove:hover { color: var(--red); opacity: 1; }
     .add-dropdown {
       font-family: inherit;

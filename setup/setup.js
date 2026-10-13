@@ -1601,6 +1601,199 @@
     return html;
   }
 
+  // ---------- lane rules (asset-with-loan rows) ----------
+  // The Loan lane takes Monarch liability accounts; the Asset value lane takes everything else.
+  // Used by both lanes' dropdowns and by drag-and-drop, so the two always agree. Accounts
+  // already mapped against these rules are left alone; they just can't be newly added.
+  const MONARCH_LIABILITY_TYPES = ['loan', 'credit', 'other_liability'];
+
+  function monarchTypeOf(sourceId) {
+    const acc = monarchAccounts.find((a) => a.id === sourceId);
+    return (acc && acc.type && String(acc.type).trim().toLowerCase()) || 'other_asset';
+  }
+
+  /** lane: 'main' (single-lane row), 'value' or 'loan' (asset-with-loan row). */
+  function laneAcceptsType(lane, type) {
+    const liability = MONARCH_LIABILITY_TYPES.includes(String(type || '').toLowerCase());
+    if (lane === 'loan') return liability;
+    if (lane === 'value') return !liability;
+    return true;
+  }
+
+  // ---------- drag and drop Monarch chips ----------
+  // Drag a chip to reorder it within its lane or move it to another lane (in the same row or
+  // another row). Only drops the dropdowns would also allow are accepted (see canDropChip).
+
+  let chipDrag = null; // { chip, fromMapping, fromLane, height }
+  let activeDropZone = null;
+  // The dashed chip-shaped placeholder where the dragged chip will land. It's a real flex item
+  // in the lane, so the chips around it move aside; it grows in and shrinks out so they slide.
+  let dropSlot = null; // { el, rowEl, index }
+  const DROP_SLOT_WIDTH = 90;
+  const DROP_SLOT_MS = 120;
+  const CHIP_GAP = 8; // matches .chips-row gap
+
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function retireDropSlot(el) {
+    if (!el) return;
+    el.classList.add('leaving');
+    if (reducedMotion() || typeof el.animate !== 'function') { el.remove(); return; }
+    const w = el.getBoundingClientRect().width;
+    el.animate(
+      [{ width: `${w}px`, marginRight: '0px', opacity: 1 }, { width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }],
+      { duration: DROP_SLOT_MS, easing: 'ease-out', fill: 'forwards' }
+    ).onfinish = () => el.remove();
+  }
+
+  /** Show the placeholder at `index` in a lane (no-op if it's already there). */
+  function placeDropSlot(rowEl, index) {
+    if (dropSlot && dropSlot.rowEl === rowEl && dropSlot.index === index) return;
+    if (dropSlot) retireDropSlot(dropSlot.el);
+    const el = document.createElement('div');
+    el.className = 'chip-drop-slot';
+    el.style.height = `${(chipDrag && chipDrag.height) || 32}px`;
+    const tags = rowEl.querySelectorAll(':scope > .chip-tag');
+    rowEl.insertBefore(el, tags[index] || null);
+    if (!reducedMotion() && typeof el.animate === 'function') {
+      el.animate(
+        [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${DROP_SLOT_WIDTH}px`, marginRight: '0px', opacity: 1 }],
+        { duration: DROP_SLOT_MS, easing: 'ease-out' }
+      );
+    }
+    dropSlot = { el, rowEl, index };
+  }
+
+  function laneArray(mapping, lane) {
+    if (lane === 'loan') {
+      if (!Array.isArray(mapping.monarchAccountsLoan)) mapping.monarchAccountsLoan = [];
+      return mapping.monarchAccountsLoan;
+    }
+    if (!Array.isArray(mapping.monarchAccounts)) mapping.monarchAccounts = [];
+    return mapping.monarchAccounts;
+  }
+
+  /** Can the chip being dragged be dropped into `lane` of `mapping`? */
+  function canDropChip(mapping, lane) {
+    if (!chipDrag) return false;
+    const { chip, fromMapping, fromLane } = chipDrag;
+    if (mapping === fromMapping && lane === fromLane) return true; // reorder
+    const sourceId = Model.sourceIdOf(chip);
+    const dual = isAssetWithLoanMapping(mapping);
+    if ((lane === 'main') === dual) return false; // lane doesn't match the row's layout
+    // The account can't already be in the target row (the dragged chip itself doesn't count).
+    const inRow = [...(mapping.monarchAccounts || []), ...(mapping.monarchAccountsLoan || [])]
+      .some((c) => c !== chip && Model.sourceIdOf(c) === sourceId);
+    if (inRow) return false;
+    if (Model.isSplitChip(chip)) return lane === 'main' && rowAcceptsSplit(mapping);
+    return laneAcceptsType(lane, monarchTypeOf(sourceId));
+  }
+
+  /** Index in the lane (counting real chips only) where a drop at (x, y) lands. */
+  function dropIndexAt(chipsRowEl, x, y) {
+    // While the pointer is over the placeholder, keep it where it is: the chips that just
+    // moved aside would otherwise flip the answer back and forth.
+    if (dropSlot && dropSlot.rowEl === chipsRowEl) {
+      const r = dropSlot.el.getBoundingClientRect();
+      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= r.top && y <= r.bottom) return dropSlot.index;
+    }
+    const tags = Array.from(chipsRowEl.querySelectorAll(':scope > .chip-tag'));
+    for (let i = 0; i < tags.length; i++) {
+      const r = tags[i].getBoundingClientRect();
+      if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) return i;
+    }
+    return tags.length;
+  }
+
+  function clearChipDropIndicators() {
+    if (activeDropZone) activeDropZone.classList.remove('chip-drop-target');
+    activeDropZone = null;
+    if (dropSlot) retireDropSlot(dropSlot.el);
+    dropSlot = null;
+  }
+
+  /** Make a lane accept chip drops. zoneEl is the whole lane area; chipsRowEl holds its chips. */
+  function registerChipDropZone(zoneEl, chipsRowEl, mapping, lane) {
+    zoneEl.addEventListener('dragover', (e) => {
+      if (!chipDrag) return;
+      e.stopPropagation();
+      if (!canDropChip(mapping, lane)) {
+        e.dataTransfer.dropEffect = 'none';
+        clearChipDropIndicators();
+        return;
+      }
+      e.preventDefault(); // allow the drop
+      e.dataTransfer.dropEffect = 'move';
+      if (activeDropZone !== zoneEl) {
+        clearChipDropIndicators();
+        activeDropZone = zoneEl;
+        zoneEl.classList.add('chip-drop-target');
+      }
+      placeDropSlot(chipsRowEl, dropIndexAt(chipsRowEl, e.clientX, e.clientY));
+    });
+    zoneEl.addEventListener('drop', async (e) => {
+      if (!chipDrag || !canDropChip(mapping, lane)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Drop where the placeholder is shown, so what the user saw is what they get.
+      const index = dropSlot && dropSlot.rowEl === chipsRowEl ? dropSlot.index : dropIndexAt(chipsRowEl, e.clientX, e.clientY);
+      const { chip, fromMapping, fromLane } = chipDrag;
+      // The re-render below removes the dragged element, so its dragend may never fire.
+      chipDrag = null;
+      clearChipDropIndicators();
+      const from = laneArray(fromMapping, fromLane);
+      const to = laneArray(mapping, lane);
+      const fromIndex = from.indexOf(chip);
+      if (fromIndex === -1) return;
+      let insertAt = index;
+      if (from === to) {
+        if (insertAt === fromIndex || insertAt === fromIndex + 1) return; // dropped where it was
+        if (insertAt > fromIndex) insertAt -= 1;
+      }
+      from.splice(fromIndex, 1);
+      to.splice(insertAt, 0, chip);
+      if (Model.isSplitChip(chip)) touchSplit(Model.sourceIdOf(chip));
+      refreshMappingRows();
+      if (await persistMappings()) showRowSavedCheck(rowElByMapping.get(mapping));
+    });
+  }
+
+  // Dragging over anything that isn't a valid lane clears the indicators.
+  document.addEventListener('dragover', () => { if (chipDrag) clearChipDropIndicators(); });
+
+  const GRIP_SVG = '<svg viewBox="0 0 8 14" aria-hidden="true"><circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/></svg>';
+
+  /** Let a chip be dragged. Drags start anywhere except its inputs and buttons. */
+  function makeChipDraggable(tag, chip, mapping, lane) {
+    tag.classList.add('chip-draggable');
+    const grip = document.createElement('span');
+    grip.className = 'chip-grip';
+    grip.innerHTML = GRIP_SVG;
+    tag.insertBefore(grip, tag.firstChild);
+    // Only arm dragging on mousedown outside controls, so text in the % field stays selectable.
+    tag.addEventListener('mousedown', (e) => {
+      tag.draggable = !(e.target.closest && e.target.closest('input, button, textarea'));
+    });
+    tag.addEventListener('mouseup', () => { tag.draggable = false; });
+    tag.addEventListener('dragstart', (e) => {
+      chipDrag = { chip, fromMapping: mapping, fromLane: lane, height: tag.offsetHeight };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', chip.name || '');
+      hideNotePop();
+      hideTip();
+      // The browser snapshots the chip for the drag ghost first; fade the original after.
+      setTimeout(() => tag.classList.add('chip-dragging'), 0);
+    });
+    tag.addEventListener('dragend', () => {
+      chipDrag = null;
+      tag.draggable = false;
+      tag.classList.remove('chip-dragging');
+      clearChipDropIndicators();
+    });
+  }
+
   function addMappingRow(mapping) {
     // Ensure mapping has the expected shape so a bad entry can't break rendering.
     if (!mapping || typeof mapping !== 'object') {
@@ -1661,13 +1854,15 @@
       chipsRow.innerHTML = '';
       const mi = accountMappings.indexOf(mapping);
       (mapping.monarchAccounts || []).forEach((ma, ci) => {
-        chipsRow.appendChild(buildMonarchChip(mapping, ma, mi, ci, async () => {
+        const tag = buildMonarchChip(mapping, ma, mi, ci, async () => {
           selected.delete(Model.sourceIdOf(ma));
           mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a !== ma);
           if (Model.isSplitChip(ma)) touchSplit(Model.sourceIdOf(ma));
           refreshMappingRows();
           await persistMappings();
-        }));
+        });
+        makeChipDraggable(tag, ma, mapping, 'main');
+        chipsRow.appendChild(tag);
       });
       renderRowSplitMessages(mapping, splitMsgBox);
       addMonarchRow.innerHTML = '';
@@ -1760,6 +1955,7 @@
     monarchNormalLayout.appendChild(chipsRow);
     monarchNormalLayout.appendChild(splitMsgBox);
     monarchNormalLayout.appendChild(addMonarchRow);
+    registerChipDropZone(monarchNormalLayout, chipsRow, mapping, 'main');
 
     const monarchAssetWithLoanLayout = document.createElement('div');
     monarchAssetWithLoanLayout.className = 'monarch-asset-with-loan-layout';
@@ -1795,6 +1991,8 @@
     loanLane.appendChild(loanAddRow);
     monarchAssetWithLoanLayout.appendChild(valueLane);
     monarchAssetWithLoanLayout.appendChild(loanLane);
+    registerChipDropZone(valueLane, valueChipsRow, mapping, 'value');
+    registerChipDropZone(loanLane, loanChipsRow, mapping, 'loan');
 
     function renderValueLane() {
       valueChipsRow.innerHTML = '';
@@ -1808,10 +2006,11 @@
           renderLoanLane();
           await persistMappings();
         };
+        makeChipDraggable(tag, ma, mapping, 'value');
         valueChipsRow.appendChild(tag);
       });
       valueAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
+      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('value', a.type));
       if (unselected.length) {
         const wrap = document.createElement('span');
         const widget = document.createElement('div');
@@ -1837,7 +2036,7 @@
           }
         }
         function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
+          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('value', a.type));
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
@@ -1881,10 +2080,11 @@
           renderLoanLane();
           await persistMappings();
         };
+        makeChipDraggable(tag, ma, mapping, 'loan');
         loanChipsRow.appendChild(tag);
       });
       loanAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
+      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('loan', a.type));
       if (unselected.length) {
         const wrap = document.createElement('span');
         const widget = document.createElement('div');
@@ -1910,7 +2110,7 @@
           }
         }
         function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false });
+          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('loan', a.type));
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
