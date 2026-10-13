@@ -642,7 +642,7 @@
     .monarch-add-panel.open-up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
     .monarch-add-panel-header {
       font-weight: 700;
-      font-size: 11px;
+      font-size: 13px; /* same as the account rows */
       color: var(--text);
       background: var(--surface);
       padding: 6px 12px;
@@ -650,6 +650,18 @@
       top: 0;
       z-index: 1;
     }
+    /* Monarch pickers are wider than their 180px field so account names don't wrap: they size
+       to the longest name, between 280px and 360px. The ProjectionLab picker keeps its width. */
+    .monarch-normal-layout .monarch-add-panel,
+    .re-lane .monarch-add-panel { width: max-content; min-width: max(100%, 280px); max-width: 360px; }
+    /* Monarch pickers: header with a right-aligned "Select All" (setup.js monarchCategoryHeader). */
+    .monarch-add-panel-header.has-select-all { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .select-all-btn {
+      font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2);
+      background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+    }
+    .select-all-btn:hover { color: var(--ink); }
     .monarch-add-panel-option {
       padding: 8px 12px;
       font-size: 13px;

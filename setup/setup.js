@@ -1794,6 +1794,31 @@
     });
   }
 
+  /**
+   * Category header for a Monarch picker, with a right-aligned "Select All" that adds every
+   * account listed under it right now (already-selected accounts aren't listed, and a search
+   * narrows the list), as one change.
+   */
+  function monarchCategoryHeader(cat, accounts, onSelectAll) {
+    const header = document.createElement('div');
+    header.className = 'monarch-add-panel-header has-select-all';
+    const label = document.createElement('span');
+    label.textContent = displayNameForType(cat);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'select-all-btn';
+    btn.textContent = 'Select All';
+    btn.setAttribute('aria-label', `Add all ${accounts.length} ${displayNameForType(cat)} account${accounts.length === 1 ? '' : 's'}`);
+    btn.onmousedown = (e) => e.preventDefault(); // keep the search field focused
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      onSelectAll(accounts.map((a) => a.id));
+    };
+    header.appendChild(label);
+    header.appendChild(btn);
+    return header;
+  }
+
   function addMappingRow(mapping) {
     // Ensure mapping has the expected shape so a bad entry can't break rendering.
     if (!mapping || typeof mapping !== 'object') {
@@ -1879,32 +1904,36 @@
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
         panel.setAttribute('role', 'listbox');
-        function addAccount(id) {
-          const acc = monarchAccounts.find((a) => a.id === id);
-          if (!acc) return;
-          const option = getUnselectedMonarchIds(selected, mapping).find((a) => a.id === id);
-          selected.add(id);
+        function addAccounts(ids) {
+          const options = getUnselectedMonarchIds(selected, mapping);
           if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
-          if (option && option.remaining != null) {
-            // Already split elsewhere: add a share pre-filled with what's left.
-            mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
-            touchSplit(acc.id);
-          } else {
-            mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
+          let added = 0;
+          for (const id of ids) {
+            const acc = monarchAccounts.find((a) => a.id === id);
+            if (!acc || selected.has(id)) continue;
+            const option = options.find((a) => a.id === id);
+            selected.add(id);
+            if (option && option.remaining != null) {
+              // Already split elsewhere: add a share pre-filled with what's left.
+              mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
+              touchSplit(acc.id);
+            } else {
+              mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
+            }
+            added++;
           }
+          if (!added) return;
           refreshMappingRows();
           autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
         }
+        const addAccount = (id) => addAccounts([id]);
         function updatePanel() {
           const unselectedNow = getUnselectedMonarchIds(selected, mapping);
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
           for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
+            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addAccounts));
             for (const a of byCategory.get(cat)) {
               const opt = document.createElement('div');
               opt.className = 'monarch-add-panel-option';
@@ -2023,28 +2052,26 @@
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
         panel.setAttribute('role', 'listbox');
-        function addToValue(id) {
-          const acc = monarchAccounts.find((a) => a.id === id);
-          if (acc) {
-            if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
-            mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
-            input.value = '';
-            panel.style.display = 'none';
-            renderValueLane();
-            renderLoanLane();
-            autoSaveMappingsIfRowComplete(mapping, tr);
-          }
+        function addManyToValue(ids) {
+          if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+          const inRow = getCombinedSelectedIds();
+          const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
+          if (!accs.length) return;
+          accs.forEach((acc) => mapping.monarchAccounts.push({ id: acc.id, name: acc.name }));
+          input.value = '';
+          panel.style.display = 'none';
+          renderValueLane();
+          renderLoanLane();
+          autoSaveMappingsIfRowComplete(mapping, tr);
         }
+        const addToValue = (id) => addManyToValue([id]);
         function updatePanel() {
           const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('value', a.type));
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
           for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
+            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addManyToValue));
             for (const a of byCategory.get(cat)) {
               const opt = document.createElement('div');
               opt.className = 'monarch-add-panel-option';
@@ -2097,28 +2124,26 @@
         const panel = document.createElement('div');
         panel.className = 'monarch-add-panel';
         panel.setAttribute('role', 'listbox');
-        function addToLoan(id) {
-          const acc = monarchAccounts.find((a) => a.id === id);
-          if (acc) {
-            if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
-            mapping.monarchAccountsLoan.push({ id: acc.id, name: acc.name });
-            input.value = '';
-            panel.style.display = 'none';
-            renderValueLane();
-            renderLoanLane();
-            autoSaveMappingsIfRowComplete(mapping, tr);
-          }
+        function addManyToLoan(ids) {
+          if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
+          const inRow = getCombinedSelectedIds();
+          const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
+          if (!accs.length) return;
+          accs.forEach((acc) => mapping.monarchAccountsLoan.push({ id: acc.id, name: acc.name }));
+          input.value = '';
+          panel.style.display = 'none';
+          renderValueLane();
+          renderLoanLane();
+          autoSaveMappingsIfRowComplete(mapping, tr);
         }
+        const addToLoan = (id) => addManyToLoan([id]);
         function updatePanel() {
           const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('loan', a.type));
           const query = input.value.trim();
           const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
           panel.innerHTML = '';
           for (const cat of sortedCategories) {
-            const header = document.createElement('div');
-            header.className = 'monarch-add-panel-header';
-            header.textContent = displayNameForType(cat);
-            panel.appendChild(header);
+            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addManyToLoan));
             for (const a of byCategory.get(cat)) {
               const opt = document.createElement('div');
               opt.className = 'monarch-add-panel-option';
