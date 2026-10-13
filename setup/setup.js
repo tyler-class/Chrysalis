@@ -2055,6 +2055,7 @@
     cellArrow.className = 'map-arrow';
     const arrowSpan = document.createElement('span');
     cellArrow.appendChild(arrowSpan);
+    attachTip(arrowSpan, ICON_TIP_DELAY_MS); // text set in updateArrow (none when there's nothing to explain)
     function updateArrow() {
       const isDual = isAssetWithLoanMapping(mapping);
       const valueCount = mapping.monarchAccounts?.length || 0;
@@ -2064,13 +2065,16 @@
       arrowSpan.setAttribute('data-aggregate', multi ? '1' : '0');
       arrowSpan.textContent = multi ? '∑→' : '→';
       const labels = (mapping.monarchAccounts || []).map((c) => Model.chipLabel(c));
+      let tip = '';
       if (isDual) {
-        arrowSpan.title = multi ? 'Value and loan balances will be summed per field' : '';
+        tip = multi ? 'Value and loan balances will be summed per field' : '';
       } else if (multi) {
-        arrowSpan.title = `${mapping.plName || 'This account'} = ${labels.join(' + ')}`;
+        tip = `${mapping.plName || 'This account'} = ${labels.join(' + ')}`;
       } else {
-        arrowSpan.title = rowHasSplit(mapping) ? labels[0] : '';
+        tip = rowHasSplit(mapping) ? labels[0] : '';
       }
+      if (tip) arrowSpan.dataset.tip = tip;
+      else delete arrowSpan.dataset.tip;
     }
 
     const cellMonarch = document.createElement('td');
@@ -2405,7 +2409,7 @@
     plClearBtn.innerHTML = '×';
     plClearBtn.setAttribute('aria-label', 'Clear selection');
     plClearBtn.hidden = true;
-    attachTip(plClearBtn, REMOVE_TIP_DELAY_MS);
+    attachTip(plClearBtn, ICON_TIP_DELAY_MS);
     function updatePLClearVisibility() {
       const showSearch = !plInput.readOnly && plInput.value.length > 0;
       const showSelection = !!(plInput.readOnly && mapping.plId);
@@ -2483,7 +2487,7 @@
     removeBtn.innerHTML = '×';
     removeBtn.dataset.tip = 'Remove row';
     removeBtn.setAttribute('aria-label', 'Remove row');
-    attachTip(removeBtn, REMOVE_TIP_DELAY_MS);
+    attachTip(removeBtn, ICON_TIP_DELAY_MS);
     removeBtn.onclick = async () => {
       hideTip(); // the button is about to be removed with its row
       const idx = accountMappings.indexOf(mapping);
@@ -2644,7 +2648,8 @@
     input.value = chip._raw != null ? chip._raw : (chip.pct == null ? '' : String(chip.pct));
     const rawInvalid = chip._raw != null && Model.parsePct(chip._raw) === null;
     if (rawInvalid || state === 'over' || state === 'invalid') input.classList.add('err');
-    if (rawInvalid) input.title = 'Enter a number from 0 to 100';
+    if (rawInvalid) input.dataset.tip = 'Enter a number from 0 to 100';
+    attachTip(input, ICON_TIP_DELAY_MS); // shows only while the entry is invalid (data-tip set)
     input.setAttribute('aria-label', ariaLabel);
     input.addEventListener('input', () => onShareInput(chip, input.value));
     input.placeholder = '0';
@@ -2656,7 +2661,7 @@
       if (chip.pct != null && input.value !== String(chip.pct)) {
         input.value = String(chip.pct);
         // Clear only the "not a number" marking (it sets the title); over-100% stays red.
-        if (input.title) { input.classList.remove('err'); input.removeAttribute('title'); }
+        if (input.dataset.tip) { input.classList.remove('err'); delete input.dataset.tip; hideTip(); }
       }
     });
     return input;
@@ -2713,11 +2718,13 @@
       const isOpenNow = () => !!(splitPanel && splitPanel.sourceId === sourceId && splitPanel.anchor === mapping);
       btn.setAttribute('aria-expanded', isOpenNow() ? 'true' : 'false');
       btn.setAttribute('aria-haspopup', 'dialog');
-      btn.title = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
+      btn.dataset.tip = Model.isSplitChip(chip) ? 'Edit split' : 'Split across ProjectionLab accounts';
+      attachTip(btn, ICON_TIP_DELAY_MS);
       btn.setAttribute('aria-label', (Model.isSplitChip(chip) ? 'Edit split of ' : 'Split ') + chip.name);
       btn.innerHTML = SPLIT_ICON_SVG;
       btn.onclick = async (e) => {
         e.stopPropagation();
+        hideTip();
         if (isOpenNow()) { closeSplitPanel(); return; }
         if (!Model.isSplitChip(chip)) {
           // Start a split: this row keeps 100% until the user adds shares elsewhere.
@@ -2836,14 +2843,15 @@
   }
 
   const REMOVE_MONARCH_TIP = 'Remove selected Monarch Money account';
-  // × buttons wait a moment before showing their tip, so it doesn't flash while aiming to click.
-  const REMOVE_TIP_DELAY_MS = 1500;
+  // Icon buttons (×, swap, split, …) wait a moment before showing their tip, so it doesn't flash
+  // while aiming to click. Warnings that need attention (amber pill, Map Accounts icon) show at once.
+  const ICON_TIP_DELAY_MS = 1500;
 
   /** A chip's × button: styled hover tip, an accessible name, and the tip hidden on click. */
   function setupChipRemoveButton(btn, accountName, onRemove) {
     btn.dataset.tip = REMOVE_MONARCH_TIP;
     btn.setAttribute('aria-label', `Remove ${accountName}`);
-    attachTip(btn, REMOVE_TIP_DELAY_MS);
+    attachTip(btn, ICON_TIP_DELAY_MS);
     btn.onclick = (e) => {
       hideTip(); // the chip (and this button) is about to be removed
       return onRemove(e);
@@ -2870,6 +2878,7 @@
   }
 
   attachTip(document.getElementById('chip-maps'));
+  attachTip(document.querySelector('.header-links .help-icon-link'), ICON_TIP_DELAY_MS);
   attachTip(document.querySelector('#step3 .step-num'));
   window.addEventListener('scroll', hideTip, true);
 
@@ -3697,7 +3706,7 @@
     const label = title ? 'Edit title' : 'Add a title';
     edit.setAttribute('aria-label', label);
     edit.dataset.tip = label;
-    attachTip(edit, REMOVE_TIP_DELAY_MS);
+    attachTip(edit, ICON_TIP_DELAY_MS);
     edit.onclick = (e) => {
       e.stopPropagation();
       hideTip();
@@ -3758,7 +3767,7 @@
     const label = `Swap the "${rowLabel(above)}" and "${rowLabel(below)}" rows`;
     btn.setAttribute('aria-label', label);
     btn.dataset.tip = label;
-    attachTip(btn, REMOVE_TIP_DELAY_MS);
+    attachTip(btn, ICON_TIP_DELAY_MS);
     btn.onclick = () => swapRows(index);
     return btn;
   }
