@@ -28,10 +28,10 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 investment account can now feed several ProjectionLab accounts by percentage. For example, you
 can send the pre-tax, Roth and after-tax parts of a 401(k) to separate ProjectionLab accounts so
 you can model retirement withdrawals differently for each, or split one savings account
-between an emergency fund and a house down payment. Split shares from different
+between an emergency fund and a house down payment. Splits from different
 accounts can also be combined into one ProjectionLab account (e.g. both spouses'
 mega-backdoor money into one bucket). Each split can carry a note, splits are included
-in mapping backups, and Sync History shows exactly how every share was calculated.
+in mapping backups, and Sync History shows exactly how every split was calculated.
 See [Splitting an account](#splitting-an-account).
 
 **Also in v1.2.0:**
@@ -194,32 +194,32 @@ Any Monarch account under the **Cash** heading (checking, savings, money market�
 
 2. Click the **split icon** on its chip. The split panel opens, with the whole balance (100%) in this row to start.
 
-   <kbd><img src="screenshots/split-panel-new.png" width="600" alt="The split panel just opened: one share at 100% ($7,500), fully allocated"></kbd>
+   <kbd><img src="screenshots/split-panel-new.png" width="600" alt="The split panel just opened: one split at 100% ($7,500), fully allocated"></kbd>
 
-3. Under **Add a split to…**, pick another ProjectionLab account. If that account already has a row, the share is added to that row; otherwise a new row is created for it. The panel shows each share's dollar amount and anything still unallocated. The totals of all split entries for a Monarch account must be exactly 100%.
+3. Under **Add a split to…**, pick another ProjectionLab account. If that account already has a row, the split is added to that row; otherwise a new row is created for it. The panel shows each split's dollar amount and anything still unallocated. The totals of all split entries for a Monarch account must be exactly 100%.
 
-   <kbd><img src="screenshots/split-panel-under-100.png" width="600" alt="Split panel with two shares at 75% and 15%, showing 10% ($750) unallocated"></kbd>
+   <kbd><img src="screenshots/split-panel-under-100.png" width="600" alt="Split panel with two splits at 75% and 15%, showing 10% ($750) unallocated"></kbd>
 
-4. Enter each share's percentage. A newly added share starts with whatever is unallocated so far. When the shares add up to 100%, the panel shows **Fully allocated** in green.
+4. Enter each split's percentage. A newly added split starts with whatever is unallocated so far. When the splits add up to 100%, the panel shows **Fully allocated** in green.
 
-   <kbd><img src="screenshots/split-panel-fully-allocated.png" width="600" alt="Split panel with two shares at 75% and 25%, fully allocated"></kbd>
+   <kbd><img src="screenshots/split-panel-fully-allocated.png" width="600" alt="Split panel with two splits at 75% and 25%, fully allocated"></kbd>
 
-   Thinking in dollars? Click the **calculator icon** next to a share, type the dollar amount, and Chrysalis works out the percentage from the account's current Monarch balance (keep a Monarch tab open). **Use this percent** puts it in the share.
+   Thinking in dollars? Click the **calculator icon** next to a split, type the dollar amount, and Chrysalis works out the percentage from the account's current Monarch balance (keep a Monarch tab open). **Use this percent** puts it in the split.
 
-   <kbd><img src="screenshots/split-calculator.png" width="400" alt="Share calculator: $1,250 of a $7,500 balance is 16.67%"></kbd>
+   <kbd><img src="screenshots/split-calculator.png" width="400" alt="Split calculator: $1,250 of a $7,500 balance is 16.67%"></kbd>
 
 5. Optionally write a **Note** (up to 500 characters) to remind yourself where the percentages came from, documenting your thought process so you can easily remember what you did later.
 
 How the rules work:
 
-- **Each ProjectionLab account has one row**, and a row can still sum several Monarch accounts. A row can mix whole accounts and split shares (for example, 10% of a 401(k) plus a whole Roth IRA into one "Roth" account).
-- **Each Monarch account's shares must add up to 100% across all rows.** Percentages inside one row are never added to each other: a row with 15% of one 401(k) and 20% of another is fine because they are from different Monarch accounts. The total must be 100% per each Monarch account being split.
-- **Not at 100%? Nothing syncs.** If any split account's shares total more or less than 100%, Setup shows a warning and hides the **Ready to Sync** pill, the popup shows **Incomplete split percentages** instead of **Sync Now**, and scheduled auto-syncs are skipped. Fix the split and syncing resumes. Under 100%, Setup also shows the dollars that wouldn't sync anywhere; over 100%, the account turns red.
+- **Each ProjectionLab account has one row**, and a row can still sum several Monarch accounts. A row can mix whole accounts and splits (for example, 10% of a 401(k) plus a whole Roth IRA into one "Roth" account).
+- **Each Monarch account's splits must add up to 100% across all rows.** Percentages inside one row are never added to each other: a row with 15% of one 401(k) and 20% of another is fine because they are from different Monarch accounts. The total must be 100% per each Monarch account being split.
+- **Not at 100%? Nothing syncs.** If any split account totals more or less than 100%, Setup shows a warning and hides the **Ready to Sync** pill, the popup shows **Incomplete split percentages** instead of **Sync Now**, and scheduled auto-syncs are skipped. Fix the split and syncing resumes. Under 100%, Setup also shows the dollars that wouldn't sync anywhere; over 100%, the account turns red.
 
   <kbd><img src="screenshots/split-rows-under-100.png" width="600" alt="Two rows sharing one checking account at 50% and 40%, each warning that it is 90% allocated"></kbd>
-- **A 0% share never syncs**, so it can't inadvertently overwrite a ProjectionLab balance to $0.
+- **A 0% split never syncs**, so it can't inadvertently overwrite a ProjectionLab balance to $0.
 - **Rounding:** splits are rounded to the cent so they always add back up to the exact Monarch balance.
-- **To stop splitting,** remove the shares with ×, then remove the last chip and add the account back without a split.
+- **To stop splitting,** remove the splits with ×, then remove the last chip and add the account back without a split.
 - Each row shows an **Estimated sync $X** preview based on the balances from your last account refresh.
 
 Split percentages do not update themselves. You will need to periodically review your splits percentages and update them according to your purposes, for example as the roth vs. traditional portions of a retirement account drift over time, you maybe need to adjust the split percentages accordingly to keep teh right balance distribution in your target ProjectionLab accounts.
@@ -290,7 +290,7 @@ Click **View History** on the setup page, or the same link in the extension popu
 
 <kbd><img src="screenshots/sync-history-run-record.png" width="600"></kbd>
 
-For rows that sum several accounts or use split shares, each run record lists every source with its percentage, the Monarch balance it came from, the amount it contributed and any rounding. A **Split settings at sync time** section records every split as it was when the sync ran, so older runs still make sense after you change a split.
+For rows that sum several accounts or use splits, each run record lists every source with its percentage, the Monarch balance it came from, the amount it contributed and any rounding. A **Split settings at sync time** section records every split as it was when the sync ran, so older runs still make sense after you change a split.
 
 ### Partial sync behavior
 
