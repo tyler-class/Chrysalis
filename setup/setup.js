@@ -2175,13 +2175,13 @@
       (mapping.monarchAccounts || []).forEach((ma) => {
         const tag = document.createElement('span');
         tag.className = 'chip-tag';
-        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove" aria-label="Remove">×</button>`;
-        tag.querySelector('.remove').onclick = async () => {
+        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove">×</button>`;
+        setupChipRemoveButton(tag.querySelector('.remove'), ma.name, async () => {
           mapping.monarchAccounts = mapping.monarchAccounts.filter((a) => a.id !== ma.id);
           renderValueLane();
           renderLoanLane();
           await persistMappings();
-        };
+        });
         makeChipDraggable(tag, ma, mapping, 'value');
         valueChipsRow.appendChild(tag);
       });
@@ -2220,13 +2220,13 @@
       (mapping.monarchAccountsLoan || []).forEach((ma) => {
         const tag = document.createElement('span');
         tag.className = 'chip-tag';
-        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove" aria-label="Remove">×</button>`;
-        tag.querySelector('.remove').onclick = async () => {
+        tag.innerHTML = `${escapeHtml(ma.name)} <button type="button" class="remove">×</button>`;
+        setupChipRemoveButton(tag.querySelector('.remove'), ma.name, async () => {
           mapping.monarchAccountsLoan = mapping.monarchAccountsLoan.filter((a) => a.id !== ma.id);
           renderValueLane();
           renderLoanLane();
           await persistMappings();
-        };
+        });
         makeChipDraggable(tag, ma, mapping, 'loan');
         loanChipsRow.appendChild(tag);
       });
@@ -2376,16 +2376,20 @@
     plClearBtn.innerHTML = '×';
     plClearBtn.setAttribute('aria-label', 'Clear selection');
     plClearBtn.hidden = true;
+    attachTip(plClearBtn, REMOVE_TIP_DELAY_MS);
     function updatePLClearVisibility() {
       const showSearch = !plInput.readOnly && plInput.value.length > 0;
       const showSelection = !!(plInput.readOnly && mapping.plId);
       const show = showSearch || showSelection;
       plClearBtn.hidden = !show;
-      plClearBtn.setAttribute('aria-label', showSelection ? 'Clear ProjectionLab account' : 'Clear search');
+      const label = showSelection ? 'Remove selected ProjectionLab account' : 'Clear search';
+      plClearBtn.setAttribute('aria-label', label);
+      plClearBtn.dataset.tip = label;
       plInput.classList.toggle('has-clear', show);
     }
     plClearBtn.onclick = async (e) => {
       e.preventDefault();
+      hideTip();
       if (mapping.plId) {
         mapping.plId = '';
         mapping.plName = '';
@@ -2448,8 +2452,11 @@
     removeBtn.type = 'button';
     removeBtn.className = 'remove-row';
     removeBtn.innerHTML = '×';
-    removeBtn.title = 'Remove row';
+    removeBtn.dataset.tip = 'Remove row';
+    removeBtn.setAttribute('aria-label', 'Remove row');
+    attachTip(removeBtn, REMOVE_TIP_DELAY_MS);
     removeBtn.onclick = async () => {
+      hideTip(); // the button is about to be removed with its row
       const idx = accountMappings.indexOf(mapping);
       if (idx !== -1) accountMappings.splice(idx, 1);
       tr.remove();
@@ -2694,9 +2701,8 @@
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'remove';
-    remove.setAttribute('aria-label', `Remove ${chip.name}`);
     remove.textContent = '×';
-    remove.onclick = onRemove;
+    setupChipRemoveButton(remove, chip.name, onRemove);
     tag.appendChild(remove);
     return tag;
   }
@@ -2787,14 +2793,45 @@
     placeFloating(tipEl, anchor.getBoundingClientRect(), 6, 0);
   }
 
+  let tipDelayTimer = null;
+
   function hideTip() {
+    if (tipDelayTimer) { clearTimeout(tipDelayTimer); tipDelayTimer = null; }
     tipEl.hidden = true;
   }
 
-  function attachTip(node) {
+  const REMOVE_MONARCH_TIP = 'Remove selected Monarch Money account';
+  // × buttons wait a moment before showing their tip, so it doesn't flash while aiming to click.
+  const REMOVE_TIP_DELAY_MS = 1500;
+
+  /** A chip's × button: styled hover tip, an accessible name, and the tip hidden on click. */
+  function setupChipRemoveButton(btn, accountName, onRemove) {
+    btn.dataset.tip = REMOVE_MONARCH_TIP;
+    btn.setAttribute('aria-label', `Remove ${accountName}`);
+    attachTip(btn, REMOVE_TIP_DELAY_MS);
+    btn.onclick = (e) => {
+      hideTip(); // the chip (and this button) is about to be removed
+      return onRemove(e);
+    };
+  }
+
+  /** Show node's data-tip on hover: right away, or after delayMs (e.g. for × buttons). */
+  function attachTip(node, delayMs) {
     if (!node) return;
-    node.addEventListener('mouseenter', () => showTip(node));
-    node.addEventListener('mouseleave', hideTip);
+    let hovering = false;
+    node.addEventListener('mouseenter', () => {
+      hovering = true;
+      if (!delayMs) { showTip(node); return; }
+      if (tipDelayTimer) clearTimeout(tipDelayTimer);
+      tipDelayTimer = setTimeout(() => {
+        tipDelayTimer = null;
+        if (hovering && node.isConnected) showTip(node);
+      }, delayMs);
+    });
+    node.addEventListener('mouseleave', () => {
+      hovering = false;
+      hideTip();
+    });
   }
 
   attachTip(document.getElementById('chip-maps'));
