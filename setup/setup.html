@@ -563,6 +563,8 @@
       flex: 0 0 auto; position: relative; align-self: center; width: 90px; height: 0;
       pointer-events: none;
     }
+    /* Alone on its own line: real height, so the lane grows a line instead of overlapping. */
+    .chip-drop-slot.own-line { height: var(--slot-h, 32px); }
     .chip-drop-slot::before {
       content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--slot-h, 32px);
       transform: translateY(-50%); box-sizing: border-box;

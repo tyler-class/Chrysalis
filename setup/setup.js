@@ -1671,8 +1671,17 @@
       lineRight = Math.max(lineRight, r.right);
     }
     leaving.forEach((n) => { n.style.display = ''; });
-    const free = Math.floor(contentRight - lineRight);
+    const free = Math.floor(contentRight - lineRight) - 1; // 1px spare: sub-pixel rounding could still wrap it
     return free >= DROP_SLOT_MIN_WIDTH ? Math.min(DROP_SLOT_WIDTH, free) : DROP_SLOT_WIDTH;
+  }
+
+  /** Is the (zero-height) placeholder on the same line as at least one chip? */
+  function sharesLineWithChip(el, rowEl) {
+    const y = el.getBoundingClientRect().top; // its line's vertical center
+    return Array.from(rowEl.querySelectorAll(':scope > .chip-tag')).some((t) => {
+      const r = t.getBoundingClientRect();
+      return r.top <= y && r.bottom >= y;
+    });
   }
 
   /** Show the placeholder at `index` in a lane (no-op if it's already there). */
@@ -1691,9 +1700,15 @@
     rowEl.insertBefore(el, tags[index] || null);
     const width = dropSlotWidth(el, rowEl);
     el.style.width = `${width}px`;
+    // Alone on its own line (no room left on the last one): take real height so the lane makes
+    // room for it, instead of a zero-height line that overlaps the chips and the Add field.
+    const ownLine = !sharesLineWithChip(el, rowEl);
+    el.classList.toggle('own-line', ownLine);
     if (!reducedMotion() && typeof el.animate === 'function') {
       el.animate(
-        [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${width}px`, marginRight: '0px', opacity: 1 }],
+        ownLine
+          ? [{ opacity: 0 }, { opacity: 1 }] // growing its width would start it on the line above
+          : [{ width: '0px', marginRight: `-${CHIP_GAP}px`, opacity: 0 }, { width: `${width}px`, marginRight: '0px', opacity: 1 }],
         { duration: DROP_SLOT_MS, easing: 'ease-out' }
       );
     }
@@ -1731,8 +1746,9 @@
     // moved aside would otherwise flip the answer back and forth.
     if (dropSlot && dropSlot.rowEl === chipsRowEl) {
       const r = dropSlot.el.getBoundingClientRect();
-      const half = dropSlot.height / 2; // r has zero height; the drawn chip is centered on it
-      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= r.top - half && y <= r.top + half) return dropSlot.index;
+      const half = dropSlot.height / 2; // the drawn chip is centered on r (r may have zero height)
+      const cy = r.top + r.height / 2;
+      if (x >= r.left - CHIP_GAP / 2 && x <= r.right + CHIP_GAP / 2 && y >= cy - half && y <= cy + half) return dropSlot.index;
     }
     const tags = Array.from(chipsRowEl.querySelectorAll(':scope > .chip-tag'));
     for (let i = 0; i < tags.length; i++) {
