@@ -560,6 +560,8 @@
        below sits 4px from the field (like "Add a split to…") while the layout stays the same. */
     .monarch-add-widget { position: relative; display: inline-block; min-width: 180px; margin-bottom: 10px; }
     .monarch-add-widget .add-dropdown-search { margin-bottom: 0; }
+    /* A chosen ProjectionLab account is inert (clear it with ×): no text cursor. */
+    .map-cell-pl .add-dropdown-search.is-locked { cursor: default; }
     .add-dropdown-search {
       font-family: inherit;
       font-size: 12px;

@@ -2306,7 +2306,13 @@
         plInput.value = '';
         plInput.placeholder = '+ Add ProjectionLab Account';
       }
+      // Once an account is chosen the field is inert; clear it with × to pick another.
+      plInput.classList.toggle('is-locked', !!mapping.plId);
     }
+    // A click on a chosen account does nothing: no focus, no list (see updatePLInputLabel).
+    plInput.addEventListener('mousedown', (e) => {
+      if (mapping.plId) e.preventDefault();
+    });
     function updatePLPanel() {
       const query = plInput === document.activeElement ? plInput.value.trim() : '';
       const { sortedCategories, byCategory } = getFilteredGroupedPL(query, mapping);
@@ -2344,6 +2350,7 @@
       plPanel.style.display = 'none';
     }
     plInput.onfocus = () => {
+      if (mapping.plId) return; // chosen: inert until cleared with ×
       plInput.readOnly = false;
       plInput.value = '';
       updatePLClearVisibility();
