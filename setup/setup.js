@@ -979,6 +979,23 @@
     return 'Last refreshed: ' + new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 
+  /** A successful load: record the time and show it once the status message fades. */
+  function markRefreshed(statusEl, storageKey) {
+    const now = Date.now();
+    chrome.storage.local.set({ [storageKey]: now });
+    statusEl.textContent = formatLastRefreshed(now);
+  }
+
+  /**
+   * A failed load must not look like a refresh: after the error fades, show the time of the
+   * last load that actually succeeded (or nothing if there hasn't been one).
+   */
+  async function showPreviousRefresh(statusEl, storageKey) {
+    let ts = null;
+    try { ts = (await chrome.storage.local.get([storageKey]))[storageKey]; } catch (_) {}
+    statusEl.textContent = formatLastRefreshed(ts);
+  }
+
   function setFinalLoadStatus(statusEl, text, onAfterFade) {
     if (!statusEl) return;
     if (statusEl._fadeTimeout1) clearTimeout(statusEl._fadeTimeout1);
@@ -1011,7 +1028,7 @@
     try {
       const monarchTab = await findMonarchTab();
       if (!monarchTab) {
-        setFinalLoadStatus(status, 'Open a tab to app.monarch.com first.');
+        setFinalLoadStatus(status, 'Open a tab to app.monarch.com first.', () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
         return;
       }
 
@@ -1032,34 +1049,18 @@
         monarchAccounts = monarchRes.accounts || [];
         await chrome.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
         reconcileMappingsWithAccounts();
-        setFinalLoadStatus(status, `Loaded ${monarchAccounts.length} Monarch accounts.`, () => {
-          const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
-          status.textContent = formatLastRefreshed(now);
-        });
+        setFinalLoadStatus(status, `Loaded ${monarchAccounts.length} Monarch accounts.`, () => markRefreshed(status, 'lastMonarchRefreshTime'));
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
         renderMappingRows();
       } else {
-        setFinalLoadStatus(status, 'Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'), () => {
-          const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
-          status.textContent = formatLastRefreshed(now);
-        });
+        setFinalLoadStatus(status, 'Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'), () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
       }
     } catch (e) {
       if (e.message === 'timeout') {
-        setFinalLoadStatus(status, 'Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.', () => {
-          const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
-          status.textContent = formatLastRefreshed(now);
-        });
+        setFinalLoadStatus(status, 'Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.', () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
       } else {
-        setFinalLoadStatus(status, 'Error: ' + (e.message || String(e)), () => {
-          const now = Date.now();
-          chrome.storage.local.set({ lastMonarchRefreshTime: now });
-          status.textContent = formatLastRefreshed(now);
-        });
+        setFinalLoadStatus(status, 'Error: ' + (e.message || String(e)), () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
       }
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
     } finally {
@@ -1079,19 +1080,11 @@
       plAccounts = await fetchPLAccounts();
       await chrome.storage.local.set({ cachedPLAccounts: plAccounts });
       reconcileMappingsWithAccounts();
-      setFinalLoadStatus(status, `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => {
-        const now = Date.now();
-        chrome.storage.local.set({ lastPLRefreshTime: now });
-        status.textContent = formatLastRefreshed(now);
-      });
+      setFinalLoadStatus(status, `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => markRefreshed(status, 'lastPLRefreshTime'));
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
       renderMappingRows();
     } catch (e) {
-      setFinalLoadStatus(status, 'ProjectionLab: ' + (e.message || String(e)), () => {
-        const now = Date.now();
-        chrome.storage.local.set({ lastPLRefreshTime: now });
-        status.textContent = formatLastRefreshed(now);
-      });
+      setFinalLoadStatus(status, 'ProjectionLab: ' + (e.message || String(e)), () => showPreviousRefresh(status, 'lastPLRefreshTime'));
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
     } finally {
       restoreStep2Buttons();
