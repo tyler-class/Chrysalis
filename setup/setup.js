@@ -3643,11 +3643,11 @@
     if (await persistMappings()) showRowSavedCheck(tr);
   }
 
-  // ---------- section hover lift ----------
+  // ---------- section hover shadow ----------
   // Popovers live on <body> (so cards can't clip them), which makes moving onto one count as
   // leaving its card. Each popover root has class floating-owned and an _ownerCard; while the
-  // pointer is over a card or any popover it owns, that card keeps the .hover-lift style.
-  let liftedCard = null;
+  // pointer is over a card or any popover it owns, that card keeps its hover shadow.
+  let hoveredCard = null;
   document.addEventListener('mouseover', (e) => {
     const t = e.target;
     let card = t && t.closest ? t.closest('.step-card') : null;
@@ -3655,14 +3655,14 @@
       const floating = t.closest('.floating-owned');
       card = (floating && floating._ownerCard) || null;
     }
-    if (card === liftedCard) return;
-    if (liftedCard) liftedCard.classList.remove('hover-lift');
-    liftedCard = card;
-    if (card) card.classList.add('hover-lift');
+    if (card === hoveredCard) return;
+    if (hoveredCard) hoveredCard.classList.remove('is-hovered');
+    hoveredCard = card;
+    if (card) card.classList.add('is-hovered');
   });
   document.documentElement.addEventListener('mouseleave', () => {
-    if (liftedCard) liftedCard.classList.remove('hover-lift');
-    liftedCard = null;
+    if (hoveredCard) hoveredCard.classList.remove('is-hovered');
+    hoveredCard = null;
   });
 
   // ---------- mapping-table pickers: open above when there's no room below ----------

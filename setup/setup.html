@@ -256,13 +256,13 @@
       padding: 24px 28px;
       margin-bottom: 18px;
       box-shadow: var(--shadow-md);
-      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      transition: box-shadow 0.2s ease;
     }
-    /* .hover-lift (setup.js) keeps a card lifted while the pointer is on a popover it owns. */
+    /* Hover deepens the shadow (no movement). .is-hovered (setup.js) keeps it while the pointer
+       is on a popover the card owns, since popovers live outside the card in the page. */
     .step-card:hover,
-    .step-card.hover-lift { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
-    /* The hover transform gives each card its own stacking context, so a hovered card
-       later in the page would paint over step 3's dropdowns. Keep step 3 on top. */
+    .step-card.is-hovered { box-shadow: var(--shadow-lg); }
+    /* Keep step 3's dropdowns above the cards that follow it (Advanced). */
     #step3 { position: relative; z-index: 2; }
     .step-card.complete { border-color: var(--good-line); background: var(--card); }
     .step-head {
@@ -1114,8 +1114,6 @@
 
     @media (prefers-reduced-motion: reduce) {
       .step-card,
-      .step-card:hover,
-      .step-card.hover-lift,
       .chip.ok .dot {
         animation: none !important;
         transition: none !important;
