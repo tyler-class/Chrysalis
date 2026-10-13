@@ -106,7 +106,9 @@ async function updateViaHttp(apiKey, plId, data, origin) {
   });
   const text = await res.text();
   if (typeof console !== 'undefined' && console.log) {
-    console.log('[Chrysalis] HTTP', res.status, plId, body, text.slice(0, 200));
+    const logBody = { ...body };
+    if (logBody.key) logBody.key = '[REDACTED]';
+    console.log('[Chrysalis] HTTP', res.status, plId, logBody, text.slice(0, 200));
   }
   if (!res.ok) {
     return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 150)}` };
