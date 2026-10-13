@@ -53,6 +53,32 @@ See [Splitting an account](#splitting-an-account).
   stay inside the window.
 
 <details>
+<summary><strong>v1.2.1 — quality-of-life improvements to Map Accounts</strong></summary>
+
+<br>
+
+- **Drag and drop Monarch accounts** to reorder them in a row, or move them to another
+  row or lane. A dashed placeholder shows where the account will land.
+- **Pick several Monarch accounts at once.** Accounts you pick get a ✓ and stay in the
+  list until you close it; click one again to remove it. Each category also has a
+  **Select All**.
+- **Asset-with-loan rows sort accounts by type:** the **Loan** side only takes loans,
+  credit cards and other liabilities, and the **Asset value** side takes everything else.
+- **Swap rows:** hover a row and use the ⇅ on the table's right edge to swap it with the
+  row below. The order is saved and kept in backups.
+- **Optional row titles:** hover the top of a row and click ✎ to label it (up to 250
+  characters), e.g. "All my checking accounts". Titles are kept in backups.
+- **A chosen ProjectionLab account stays put** until you clear it with ×, so a stray
+  click can't change it.
+- **Dropdowns fit the window:** they open upward near the bottom of the page, sit
+  closer to their field, and the Monarch lists are wider so names don't wrap.
+- **Tidier layout:** fields match the account chips' height, there's more room for
+  Monarch accounts, the column headers show the Monarch and ProjectionLab logos, all
+  hover tips share one style, and sections no longer jump on hover.
+
+</details>
+
+<details>
 <summary><strong>Previous release — v1.1.0</strong></summary>
 
 <br>
@@ -101,7 +127,7 @@ There are a couple of workarounds floating around the internet, but they had var
 - Google Chrome or a Chromium browser (I like Dia)
 - A [Monarch Money](https://monarchmoney.com) account
 - A [ProjectionLab](https://projectionlab.com) account with Plugins enabled
-- Your accounts must already exist in ProjectionLab (Chrysalis updatesPL  balances, it cannot create accounts)
+- Your accounts must already exist in ProjectionLab (Chrysalis updates ProjectionLab balances; it cannot create accounts)
 
 ---
 
@@ -222,7 +248,7 @@ How the rules work:
 - **To stop splitting,** remove the splits with ×, then remove the last chip and add the account back without a split.
 - Each row shows an **Estimated sync $X** preview based on the balances from your last account refresh.
 
-Split percentages do not update themselves. You will need to periodically review your splits percentages and update them according to your purposes, for example as the roth vs. traditional portions of a retirement account drift over time, you maybe need to adjust the split percentages accordingly to keep teh right balance distribution in your target ProjectionLab accounts.
+Split percentages do not update themselves. You will need to periodically review your split percentages and update them according to your purposes. For example, as the Roth vs. traditional portions of a retirement account drift over time, you may need to adjust the split percentages to keep the right balance distribution in your target ProjectionLab accounts.
 
 ### Sync Accounts
 
@@ -310,7 +336,7 @@ The **Advanced** section lives at the bottom of the setup page. It's collapsed b
 
 ### Lock / Unlock Advanced Settings
 
-To help ensure people don't accidentally take an unreversible action on their Chrysalis instance, the Advanced section is locked. Click "Unlock Advaned Settings" to enable the section, and it can be re-locked when you're done.
+To help ensure people don't accidentally take an irreversible action on their Chrysalis instance, the Advanced section is locked. Click "Unlock Advanced Settings" to enable the section, and it can be re-locked when you're done.
 
 ### Show sync debug details
 
@@ -340,7 +366,7 @@ This button only clears your account mappings, but keeps your API key and cother
 
 ### Back up or restore mappings
 
-This section has 2 buttons: one to download your current mappings as a JSON file, and another to upload mappings. This is useful if you need to migrate your Chrysalis settings from one computer to another. Or, if you are someone who clears your cache a lot if for software development purpuoses or what have you, then you might want to keep your account mappings saved to your local machine to re-upload when you're ready to sync again. The upload takes <1 second, and replaces any pre-existing mappings that may be there.
+This section has 2 buttons: one to download your current mappings as a JSON file, and another to upload mappings. This is useful if you need to migrate your Chrysalis settings from one computer to another. Or, if you are someone who clears your cache a lot for software development purposes or what have you, then you might want to keep your account mappings saved to your local machine to re-upload when you're ready to sync again. The upload takes <1 second, and replaces any pre-existing mappings that may be there.
 
 Backups include your splits and their notes. Files downloaded from older versions of Chrysalis still upload. Older versions of Chrysalis can't read a backup made by v1.2.0 or later, and refuse it rather than loading part of it. On upload, Chrysalis rejects files with invalid percentages or a ProjectionLab account mapped twice, and lists any splits that don't add up to 100% so you can fix them.
 
