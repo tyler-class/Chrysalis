@@ -1815,8 +1815,166 @@
       onSelectAll(accounts.map((a) => a.id));
     };
     header.appendChild(label);
-    header.appendChild(btn);
+    if (accounts.length) header.appendChild(btn); // nothing left to add: no button
     return header;
+  }
+
+  // ---------- Monarch account picker (multi-select) ----------
+  // One picker for normal rows and the Asset value / Loan lanes. While a picker is open (a
+  // "pick session"), clicking an account adds its chip right away and marks it with a check
+  // instead of removing it from the list; clicking a checked account removes the chip again.
+  // Adding re-renders the row, so the session (picked ids, search, scroll) lives here and the
+  // rebuilt picker reopens itself. Clicking outside or pressing Escape ends the session; the
+  // next time a picker opens, accounts already in the row aren't listed (as before).
+
+  let monarchPick = null; // { key, picked: Set<id>, query, scrollTop }
+
+  function endMonarchPick() {
+    if (!monarchPick) return;
+    const { key } = monarchPick;
+    monarchPick = null;
+    const widget = document.querySelector(`.monarch-add-widget[data-pick-key="${key}"]`);
+    if (!widget) return;
+    const panel = widget.querySelector('.monarch-add-panel');
+    const input = widget.querySelector('.add-dropdown-search');
+    if (panel) panel.style.display = 'none';
+    if (input) {
+      input.value = '';
+      if (document.activeElement === input) input.blur();
+    }
+  }
+
+  // mousedown (not click): the click that picks an account re-renders the row first.
+  document.addEventListener('mousedown', (e) => {
+    if (!monarchPick) return;
+    const widget = e.target.closest && e.target.closest('.monarch-add-widget[data-pick-key]');
+    if (widget && widget.dataset.pickKey === monarchPick.key) return;
+    endMonarchPick();
+  });
+
+  /**
+   * Build a Monarch picker for one lane, or null when there's nothing to add (and no session
+   * open on it). getOptions() lists addable accounts; addIds(ids) / removeId(id) change the row.
+   */
+  function buildMonarchPicker({ mapping, lane, getOptions, addIds, removeId }) {
+    const key = `${accountMappings.indexOf(mapping)}-${lane}`;
+    const session = monarchPick && monarchPick.key === key ? monarchPick : null;
+    if (!getOptions().length && !session) return null;
+
+    const widget = document.createElement('div');
+    widget.className = 'monarch-add-widget';
+    widget.dataset.pickKey = key;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'add-dropdown-search';
+    input.id = `monarch-pick-${key}`;
+    input.placeholder = '+ Add Monarch Account';
+    input.autocomplete = 'off';
+    const panel = document.createElement('div');
+    panel.className = 'monarch-add-panel';
+    panel.setAttribute('role', 'listbox');
+    panel.setAttribute('aria-multiselectable', 'true');
+
+    function startSession() {
+      if (monarchPick && monarchPick.key === key) return monarchPick;
+      endMonarchPick();
+      monarchPick = { key, picked: new Set(), query: '', scrollTop: 0 };
+      return monarchPick;
+    }
+
+    function pick(ids) {
+      const s = startSession();
+      const toAdd = ids.filter((id) => !s.picked.has(id));
+      if (!toAdd.length) return;
+      toAdd.forEach((id) => s.picked.add(id));
+      addIds(toAdd);
+    }
+
+    function unpick(id) {
+      const s = startSession();
+      s.picked.delete(id);
+      removeId(id);
+    }
+
+    function updatePanel() {
+      const picked = monarchPick && monarchPick.key === key ? monarchPick.picked : new Set();
+      const available = new Map(getOptions().map((a) => [a.id, a]));
+      // Accounts picked in this session stay listed (checked) in their usual place.
+      const list = monarchAccounts
+        .filter((a) => available.has(a.id) || picked.has(a.id))
+        .map((a) => available.get(a.id) || {
+          id: a.id, name: a.name, type: (a.type && String(a.type).trim()) || 'other_asset', remaining: null,
+        });
+      const query = input.value.trim();
+      const { sortedCategories, byCategory } = getFilteredGrouped(list, query);
+      panel.innerHTML = '';
+      for (const cat of sortedCategories) {
+        const items = byCategory.get(cat);
+        panel.appendChild(monarchCategoryHeader(cat, items.filter((a) => !picked.has(a.id)), pick));
+        for (const a of items) {
+          const isPicked = picked.has(a.id);
+          const opt = document.createElement('div');
+          opt.className = 'monarch-add-panel-option' + (isPicked ? ' is-picked' : '');
+          opt.textContent = a.name;
+          if (a.remaining != null && !isPicked) {
+            const meta = document.createElement('span');
+            meta.className = 'opt-split-meta';
+            meta.textContent = `Split · ${Model.formatPct(a.remaining)} left`;
+            opt.appendChild(meta);
+          }
+          if (isPicked) {
+            const check = document.createElement('span');
+            check.className = 'opt-check';
+            check.setAttribute('aria-hidden', 'true');
+            check.textContent = '✓';
+            opt.appendChild(check);
+          }
+          opt.setAttribute('data-id', a.id);
+          opt.setAttribute('role', 'option');
+          opt.setAttribute('aria-selected', isPicked ? 'true' : 'false');
+          opt.onmousedown = (e) => e.preventDefault(); // keep focus in the search field
+          opt.onclick = () => (isPicked ? unpick(a.id) : pick([a.id]));
+          panel.appendChild(opt);
+        }
+      }
+      panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
+    }
+
+    input.onfocus = () => {
+      startSession();
+      updatePanel();
+    };
+    input.oninput = () => {
+      startSession().query = input.value;
+      updatePanel();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Escape') endMonarchPick();
+    };
+    // Tabbing away ends the session; a blur caused by the row re-rendering doesn't.
+    input.addEventListener('blur', (e) => {
+      if (!input.isConnected || !monarchPick || monarchPick.key !== key) return;
+      if (e.relatedTarget && !widget.contains(e.relatedTarget)) endMonarchPick();
+    });
+    panel.addEventListener('scroll', () => {
+      if (monarchPick && monarchPick.key === key) monarchPick.scrollTop = panel.scrollTop;
+    });
+
+    widget.appendChild(input);
+    widget.appendChild(panel);
+    if (session) {
+      // Rebuilt mid-session: reopen as it was, once the row is back in the page.
+      input.value = session.query;
+      updatePanel();
+      queueMicrotask(() => {
+        if (!input.isConnected || monarchPick !== session) return;
+        if (document.activeElement !== input) input.focus();
+        panel.scrollTop = session.scrollTop;
+      });
+    } else {
+      panel.style.display = 'none';
+    }
+    return widget;
   }
 
   function addMappingRow(mapping) {
@@ -1891,90 +2049,47 @@
       });
       renderRowSplitMessages(mapping, splitMsgBox);
       addMonarchRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(selected, mapping);
-      if (unselected.length) {
+      function addAccounts(ids) {
+        const options = getUnselectedMonarchIds(selected, mapping);
+        if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
+        let added = 0;
+        for (const id of ids) {
+          const acc = monarchAccounts.find((a) => a.id === id);
+          if (!acc || selected.has(id)) continue;
+          const option = options.find((a) => a.id === id);
+          selected.add(id);
+          if (option && option.remaining != null) {
+            // Already split elsewhere: add a share pre-filled with what's left.
+            mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
+            touchSplit(acc.id);
+          } else {
+            mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
+          }
+          added++;
+        }
+        if (!added) return;
+        refreshMappingRows();
+        autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
+      }
+      async function removeAccount(id) {
+        const removed = (mapping.monarchAccounts || []).filter((c) => Model.sourceIdOf(c) === id);
+        if (!removed.length) return;
+        mapping.monarchAccounts = mapping.monarchAccounts.filter((c) => Model.sourceIdOf(c) !== id);
+        selected.delete(id);
+        if (removed.some((c) => Model.isSplitChip(c))) touchSplit(id);
+        refreshMappingRows();
+        await persistMappings();
+      }
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'main',
+        getOptions: () => getUnselectedMonarchIds(selected, mapping),
+        addIds: addAccounts,
+        removeId: removeAccount,
+      });
+      if (picker) {
         const dropdownWrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ Add Monarch Account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addAccounts(ids) {
-          const options = getUnselectedMonarchIds(selected, mapping);
-          if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
-          let added = 0;
-          for (const id of ids) {
-            const acc = monarchAccounts.find((a) => a.id === id);
-            if (!acc || selected.has(id)) continue;
-            const option = options.find((a) => a.id === id);
-            selected.add(id);
-            if (option && option.remaining != null) {
-              // Already split elsewhere: add a share pre-filled with what's left.
-              mapping.monarchAccounts.push(Model.makeSplitChip(acc.id, acc.name, option.remaining));
-              touchSplit(acc.id);
-            } else {
-              mapping.monarchAccounts.push({ id: acc.id, name: acc.name });
-            }
-            added++;
-          }
-          if (!added) return;
-          refreshMappingRows();
-          autoSaveMappingsIfRowComplete(mapping, rowElByMapping.get(mapping));
-        }
-        const addAccount = (id) => addAccounts([id]);
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(selected, mapping);
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addAccounts));
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              if (a.remaining != null) {
-                const meta = document.createElement('span');
-                meta.className = 'opt-split-meta';
-                meta.textContent = `Split · ${Model.formatPct(a.remaining)} left`;
-                opt.appendChild(meta);
-              }
-              opt.setAttribute('data-id', a.id);
-              opt.setAttribute('role', 'option');
-              opt.onclick = () => addAccount(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => {
-          updatePanel();
-          setTimeout(() => {
-            document.addEventListener('click', function closePanel(ev) {
-              if (!widget.contains(ev.target)) {
-                panel.style.display = 'none';
-                document.removeEventListener('click', closePanel);
-              }
-            });
-          }, 0);
-        };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => {
-          if (e.key === 'Escape') {
-            panel.style.display = 'none';
-            input.blur();
-          }
-        };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        dropdownWrap.appendChild(widget);
+        dropdownWrap.appendChild(picker);
         addMonarchRow.appendChild(dropdownWrap);
       }
     }
@@ -2039,58 +2154,31 @@
         valueChipsRow.appendChild(tag);
       });
       valueAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('value', a.type));
-      if (unselected.length) {
-        const wrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ Add Monarch Account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addManyToValue(ids) {
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'value',
+        getOptions: () => getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false })
+          .filter((a) => laneAcceptsType('value', a.type)),
+        addIds: (ids) => {
           if (!mapping.monarchAccounts) mapping.monarchAccounts = [];
           const inRow = getCombinedSelectedIds();
           const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
           if (!accs.length) return;
           accs.forEach((acc) => mapping.monarchAccounts.push({ id: acc.id, name: acc.name }));
-          input.value = '';
-          panel.style.display = 'none';
           renderValueLane();
           renderLoanLane();
           autoSaveMappingsIfRowComplete(mapping, tr);
-        }
-        const addToValue = (id) => addManyToValue([id]);
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('value', a.type));
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addManyToValue));
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              opt.setAttribute('data-id', a.id);
-              opt.onclick = () => addToValue(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => { updatePanel(); setTimeout(() => { document.addEventListener('click', function close(ev) { if (!widget.contains(ev.target)) { panel.style.display = 'none'; document.removeEventListener('click', close); } }); }, 0); };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => { if (e.key === 'Escape') { panel.style.display = 'none'; input.blur(); } };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        wrap.appendChild(widget);
+        },
+        removeId: async (id) => {
+          mapping.monarchAccounts = (mapping.monarchAccounts || []).filter((a) => a.id !== id);
+          renderValueLane();
+          renderLoanLane();
+          await persistMappings();
+        },
+      });
+      if (picker) {
+        const wrap = document.createElement('span');
+        wrap.appendChild(picker);
         valueAddRow.appendChild(wrap);
       }
       if (typeof updateArrow === 'function') updateArrow();
@@ -2111,58 +2199,31 @@
         loanChipsRow.appendChild(tag);
       });
       loanAddRow.innerHTML = '';
-      const unselected = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('loan', a.type));
-      if (unselected.length) {
-        const wrap = document.createElement('span');
-        const widget = document.createElement('div');
-        widget.className = 'monarch-add-widget';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'add-dropdown-search';
-        input.placeholder = '+ Add Monarch Account';
-        input.autocomplete = 'off';
-        const panel = document.createElement('div');
-        panel.className = 'monarch-add-panel';
-        panel.setAttribute('role', 'listbox');
-        function addManyToLoan(ids) {
+      const picker = buildMonarchPicker({
+        mapping,
+        lane: 'loan',
+        getOptions: () => getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false })
+          .filter((a) => laneAcceptsType('loan', a.type)),
+        addIds: (ids) => {
           if (!mapping.monarchAccountsLoan) mapping.monarchAccountsLoan = [];
           const inRow = getCombinedSelectedIds();
           const accs = ids.map((id) => monarchAccounts.find((a) => a.id === id)).filter((a) => a && !inRow.has(a.id));
           if (!accs.length) return;
           accs.forEach((acc) => mapping.monarchAccountsLoan.push({ id: acc.id, name: acc.name }));
-          input.value = '';
-          panel.style.display = 'none';
           renderValueLane();
           renderLoanLane();
           autoSaveMappingsIfRowComplete(mapping, tr);
-        }
-        const addToLoan = (id) => addManyToLoan([id]);
-        function updatePanel() {
-          const unselectedNow = getUnselectedMonarchIds(getCombinedSelectedIds(), mapping, { allowSplit: false }).filter((a) => laneAcceptsType('loan', a.type));
-          const query = input.value.trim();
-          const { sortedCategories, byCategory } = getFilteredGrouped(unselectedNow, query);
-          panel.innerHTML = '';
-          for (const cat of sortedCategories) {
-            panel.appendChild(monarchCategoryHeader(cat, byCategory.get(cat), addManyToLoan));
-            for (const a of byCategory.get(cat)) {
-              const opt = document.createElement('div');
-              opt.className = 'monarch-add-panel-option';
-              opt.textContent = a.name;
-              opt.setAttribute('data-id', a.id);
-              opt.onclick = () => addToLoan(a.id);
-              panel.appendChild(opt);
-            }
-          }
-          panel.style.display = sortedCategories.length > 0 || query ? 'block' : 'none';
-        }
-        input.onfocus = () => { updatePanel(); setTimeout(() => { document.addEventListener('click', function close(ev) { if (!widget.contains(ev.target)) { panel.style.display = 'none'; document.removeEventListener('click', close); } }); }, 0); };
-        input.oninput = () => updatePanel();
-        input.onkeydown = (e) => { if (e.key === 'Escape') { panel.style.display = 'none'; input.blur(); } };
-        widget.appendChild(input);
-        widget.appendChild(panel);
-        updatePanel();
-        panel.style.display = 'none';
-        wrap.appendChild(widget);
+        },
+        removeId: async (id) => {
+          mapping.monarchAccountsLoan = (mapping.monarchAccountsLoan || []).filter((a) => a.id !== id);
+          renderValueLane();
+          renderLoanLane();
+          await persistMappings();
+        },
+      });
+      if (picker) {
+        const wrap = document.createElement('span');
+        wrap.appendChild(picker);
         loanAddRow.appendChild(wrap);
       }
       if (typeof updateArrow === 'function') updateArrow();

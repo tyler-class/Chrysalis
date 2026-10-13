@@ -662,6 +662,12 @@
       text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
     }
     .select-all-btn:hover { color: var(--ink); }
+    /* Picked during this picker session (setup.js buildMonarchPicker): green check on the right. */
+    .monarch-add-panel-option.is-picked { position: relative; padding-right: 34px; }
+    .opt-check {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--good); font-weight: 700; font-size: 14px; line-height: 1;
+    }
     .monarch-add-panel-option {
       padding: 8px 12px;
       font-size: 13px;
