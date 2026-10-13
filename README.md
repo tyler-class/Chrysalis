@@ -22,7 +22,7 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.2.0
+## 📣 Release Announcement — v1.2.0-1
 
 **Split cash and investment accounts across ProjectionLab accounts.** One Monarch cash or
 investment account can now feed several ProjectionLab accounts by percentage. For example, you
@@ -52,9 +52,7 @@ See [Splitting an account](#splitting-an-account).
   and hover tips, smooth open/close for each section, and popovers that always
   stay inside the window.
 
-<details>
-<summary><strong>v1.2.1 — quality-of-life improvements to Map Accounts</strong></summary>
-
+<strong>Fast Follow v1.2.1: quality-of-life improvements to account mapping</strong>
 <br>
 
 - **Drag and drop Monarch accounts** to reorder them in a row, or move them to another
@@ -75,8 +73,6 @@ See [Splitting an account](#splitting-an-account).
 - **Tidier layout:** fields match the account chips' height, there's more room for
   Monarch accounts, the column headers show the Monarch and ProjectionLab logos, all
   hover tips share one style, and sections no longer jump on hover.
-
-</details>
 
 <details>
 <summary><strong>Previous release — v1.1.0</strong></summary>
