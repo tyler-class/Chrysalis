@@ -138,6 +138,7 @@
     .status-bar.yellow { background: var(--yellow-bg); border-color: var(--yellow-line); color: var(--yellow); }
     .status-bar.gray { color: var(--ink-2); }
     .status-bar.green { background: var(--good-bg); border-color: var(--good-line); color: var(--good); }
+    .status-bar.red { background: #fef2f2; border-color: #fecaca; color: var(--red); }
     .status-bar-hidden { display: none !important; }
     .dot {
       width: 7px;
@@ -148,6 +149,7 @@
     .dot.gray { background: var(--ink-3); }
     .dot.green { background: var(--good); }
     .dot.yellow { background: var(--yellow); }
+    .dot.red { background: var(--red); }
     .cta-card {
       background: var(--card);
       border: 1px solid var(--line);
@@ -159,6 +161,8 @@
     .cta-card p { margin: 0 0 12px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
     .split-problems { margin: -4px 0 14px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--yellow); font-weight: 600; }
     .split-problems li + li { margin-top: 2px; }
+    .sync-problems { margin: -4px 0 14px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--red); overflow-wrap: anywhere; }
+    .sync-problems li + li { margin-top: 4px; }
     .btn {
       font-family: inherit;
       font-size: 13px;
@@ -391,6 +395,7 @@
       display: flex;
       justify-content: flex-end;
       align-items: center;
+      gap: 6px;
     }
     .coffee-footer a {
       font-size: 11px;
@@ -512,6 +517,12 @@
         <a href="https://ko-fi.com/tylerclass" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee</a>
       </div>
       <div class="popup-footer-actions">
+        <a
+          href="mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback"
+          class="help-icon-link"
+          title="Email feedback, ideas, or bugs"
+          aria-label="Email feedback, ideas, or bugs"
+        ><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg></a>
         <a
           href="https://github.com/tyler-class/Chrysalis#readme"
           class="help-icon-link"

@@ -56,7 +56,7 @@
   function setStatus(className, text) {
     statusBar.classList.remove('status-bar-hidden');
     statusBar.className = 'status-bar ' + className;
-    statusBar.querySelector('.dot').className = 'dot ' + (className === 'green' ? 'green' : className === 'yellow' ? 'yellow' : 'gray');
+    statusBar.querySelector('.dot').className = 'dot ' + (['green', 'yellow', 'red'].includes(className) ? className : 'gray');
     statusText.textContent = text;
   }
 
@@ -93,6 +93,20 @@
       <div class="cta-card">
         <p>Sync is paused until every split account's shares add up to 100%.</p>
         <ul class="split-problems">${items}</ul>
+        <button type="button" class="btn btn-primary" id="open-setup-cta">Fix in Setup ↗</button>
+      </div>
+    `;
+    contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+  }
+
+  /** The latest Monarch or ProjectionLab account sync in Setup failed: not ready until it succeeds. */
+  function renderAccountSyncFailed(errors) {
+    setStatus('red', 'Account sync failed');
+    const items = errors.map((e) => `<li><strong>${escapeHtml(e.name)}:</strong> ${escapeHtml(e.error)}</li>`).join('');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>The last account sync in Setup didn't finish. Sync your accounts again before syncing balances.</p>
+        <ul class="sync-problems">${items}</ul>
         <button type="button" class="btn btn-primary" id="open-setup-cta">Fix in Setup ↗</button>
       </div>
     `;
@@ -407,6 +421,14 @@
 
   async function init() {
     document.getElementById('open-setup').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+    // A plain mailto link does nothing inside an extension popup. Pointing the active tab at it makes Chrome
+    // hand it to the mail app and leave the page as it was (a new tab would just sit on about:blank).
+    document.querySelectorAll('a[href^="mailto:"]').forEach((link) => {
+      link.onclick = (e) => {
+        e.preventDefault();
+        chrome.tabs.update({ url: link.href }).then(() => window.close());
+      };
+    });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const tabUrl = tab?.url || '';
@@ -425,6 +447,8 @@
           'lastSyncDebug',
           'syncHistory',
           'webstoreRatingPromptDismissed',
+          'monarchRefreshHistory',
+          'plRefreshHistory',
         ]),
         getMappingStorage().loadMappings(),
       ]);
@@ -442,6 +466,17 @@
 
     if (!isConfigured) {
       renderNotSetUp();
+      return;
+    }
+
+    const syncErrors = [
+      ['Monarch', local.monarchRefreshHistory],
+      ['ProjectionLab', local.plRefreshHistory],
+    ]
+      .map(([name, history]) => ({ name, error: history && history[0] && history[0].error }))
+      .filter((e) => e.error);
+    if (syncErrors.length) {
+      renderAccountSyncFailed(syncErrors);
       return;
     }
 
