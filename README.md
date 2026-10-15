@@ -20,11 +20,11 @@ Chrysalis is a Chrome extension that pulls your live account balances from Monar
 
 Chrysalis is, and will always be, **free** to use. But if you want to say thank you, [coffee is my love language](https://ko-fi.com/tylerclass).
 
-Got feedback, an idea, or a bug to report? Email me at [chrysalis@tylerclass.net](mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback).
+📧 Need help, or have feedback, an idea, or a bug to report? Email [chrysalis@tylerclass.net](mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback).
 
 ---
 
-## 📣 Release Announcement — v1.2.0-1
+## 📣 Release Announcement — v1.2.0-2
 
 **Split cash and investment accounts across ProjectionLab accounts.** One Monarch cash or
 investment account can now feed several ProjectionLab accounts by percentage. For example, you
@@ -75,6 +75,29 @@ See [Splitting an account](#splitting-an-account).
 - **Tidier layout:** fields match the account chips' height, there's more room for
   Monarch accounts, the column headers show the Monarch and ProjectionLab logos, all
   hover tips share one style, and sections no longer jump on hover.
+
+<strong>Fast Follow v1.2.2: clearer account loading, easier support, and setup polish</strong>
+<br>
+
+- **Load Accounts shows Monarch → ProjectionLab side by side.** Each source gets its own
+  card with how many accounts are loaded and when they were last refreshed, laid out in
+  the same left-to-right order as the mapping table below it.
+- **You can see a load happening and how it ended.** A progress bar runs while accounts
+  load, then a green ✓ or a red ✕ with the error. Errors stay on screen and outline that
+  card in red until you try again.
+- **Load history:** hover the clock icon on either card to see its last 5 loads, with
+  the date and time and how many accounts loaded, or the error if it failed.
+- **Remove Split:** a red button in the split panel turns a split account back into a
+  regular one. It stays on the row you opened the panel from, and its shares on other
+  rows are removed.
+- **Email support built in:** an ✉️ button sits next to the GitHub button in the popup,
+  and replaces the **?** in the top right of Setup, so you can email
+  [chrysalis@tylerclass.net](mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback)
+  in one click.
+- **Setup polish:** **Save Key** and **Clear API Key** sit beside the API key field, the
+  mapping table's column headers and logos are larger, and each open section has a
+  divider under its header that fades in and out with the drawer.
+- The extension's full name is now **Chrysalis: Monarch to ProjectionLab Sync**.
 
 <details>
 <summary><strong>Previous release — v1.1.0</strong></summary>
