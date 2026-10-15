@@ -88,7 +88,7 @@ See [Splitting an account](#splitting-an-account).
 - **Load history:** hover the clock icon on either card to see its last 5 loads, with
   the date and time and how many accounts loaded, or the error if it failed.
 - **Remove Split:** a red button in the split panel turns a split account back into a
-  regular one. It stays on the row you opened the panel from, and its shares on other
+  regular one. It stays on the row you opened the panel from, and its splits on other
   rows are removed.
 - **Email support built in:** an ✉️ button sits next to the GitHub button in the popup,
   and replaces the **?** in the top right of Setup, so you can email
