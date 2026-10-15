@@ -352,6 +352,10 @@
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(27,26,20,0.14);
     }
+    /* API key field with its Save / Clear buttons on the same line; wraps under on narrow windows. */
+    .key-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .key-row input { flex: 1 1 260px; margin-bottom: 0; }
+    .key-row .btn { flex-shrink: 0; white-space: nowrap; }
     .hint { font-size: 13px; color: var(--ink-2); margin-bottom: 14px; line-height: 1.5; }
     .hint-list { margin-top: 0; padding-left: 20px; }
     .hint-list li + li { margin-top: 4px; }
@@ -426,6 +430,95 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .load-status { transition: opacity 1s ease; }
     .load-status.load-status-fade-out { opacity: 0; }
+
+    /* Step 2 load buttons: history icon beside each, progress bar and outcome pill below. */
+    .conn-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+    .conn-card {
+      display: flex; flex-direction: column; gap: 10px; min-width: 0;
+      padding: 16px; border-radius: var(--r-md);
+      background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--line-strong);
+      box-shadow: var(--shadow-sm);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .conn-monarch { border-top-color: var(--monarch); }
+    .conn-pl { border-top-color: var(--projlab); }
+    .conn-card.is-error { border-color: #fecaca; border-top-color: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+    .conn-head { display: flex; align-items: center; gap: 10px; }
+    .conn-logo {
+      width: 34px; height: 34px; padding: 5px; flex-shrink: 0; object-fit: contain;
+      border-radius: 9px; background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(28,25,15,.08);
+    }
+    .conn-title { flex: 1; min-width: 0; }
+    .conn-name { font-weight: 700; font-size: 15px; color: var(--ink); }
+    .conn-role { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+    .conn-monarch .conn-role { color: var(--monarch-ink); }
+    .conn-pl .conn-role { color: var(--projlab-ink); }
+    .conn-count { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex-shrink: 0; }
+    .conn-card.is-loaded .conn-count { color: var(--ink); }
+    .conn-card.is-loaded .conn-dot { background: var(--good); }
+    .conn-card.is-error .conn-dot { background: var(--red); }
+    .conn-status { font-size: 12.5px; color: var(--muted); min-height: 1.4em; }
+    .conn-status:empty { display: none; }
+    .load-progress.conn-progress, .conn-card .load-progress { margin-top: 0; }
+    .conn-btn { width: 100%; margin-top: auto; }
+    .conn-needs { margin: -2px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+    .conn-arrow { display: flex; align-items: center; color: var(--ink-3); }
+    .conn-arrow svg { width: 22px; height: 22px; }
+    @media (max-width: 720px) {
+      .conn-grid { grid-template-columns: 1fr; }
+      .conn-arrow { justify-content: center; }
+      .conn-arrow svg { transform: rotate(90deg); }
+    }
+    .refresh-history-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+      border-radius: 50%; border: 1px solid var(--line-strong);
+      background: var(--card); color: var(--ink-2); cursor: pointer;
+      transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .refresh-history-btn svg { width: 15px; height: 15px; display: block; }
+    .refresh-history-btn:hover { color: var(--ink); background: var(--canvas-2); box-shadow: var(--shadow-sm); }
+    .refresh-history-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(27,26,20,0.16); }
+    .load-progress { margin-top: 10px; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+    .load-progress[hidden] { display: none; }
+    .load-progress-fill {
+      height: 100%; width: 0; border-radius: 999px;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.5) 50%, rgba(255,255,255,0) 100%);
+      background-size: 200% 100%;
+      animation: load-shimmer 1.2s linear infinite;
+      transition: width .3s ease, background-color .2s;
+    }
+    .load-progress-monarch .load-progress-fill { background-color: var(--monarch); }
+    .load-progress-pl .load-progress-fill { background-color: var(--projlab); }
+    .load-progress.is-ok .load-progress-fill { background-color: var(--good); animation: none; background-image: none; }
+    .load-progress.is-fail .load-progress-fill { background-color: var(--red); animation: none; background-image: none; }
+    @keyframes load-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    .load-status.is-ok, .load-status.is-fail {
+      display: inline-flex; align-items: flex-start; gap: 7px;
+      padding: 7px 12px; border-radius: var(--r-sm); border: 1px solid;
+      font-weight: 600; line-height: 1.4; max-width: 340px;
+    }
+    .load-status.is-ok { background: var(--good-bg); border-color: var(--good-line); color: var(--good) !important; }
+    .load-status.is-fail { background: var(--red-bg); border-color: #fecaca; color: var(--red) !important; }
+    .load-status-icon {
+      flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; margin-top: 1px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 11px; font-weight: 700;
+    }
+    .load-status.is-ok .load-status-icon { background: var(--good); }
+    .load-status.is-fail .load-status-icon { background: var(--red); }
+    /* Refresh history hover card (fills the shared .note-pop tip). */
+    .refresh-tip-title { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+    .refresh-tip-empty { color: var(--ink-2); }
+    .refresh-tip-row { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+    .refresh-tip-title + .refresh-tip-row { border-top: none; }
+    .refresh-tip-icon { flex-shrink: 0; width: 14px; text-align: center; font-weight: 700; }
+    .refresh-tip-row.ok .refresh-tip-icon { color: var(--good); }
+    .refresh-tip-row.fail .refresh-tip-icon { color: var(--red); }
+    .refresh-tip-time { font-weight: 600; }
+    .refresh-tip-detail { color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.4; }
+    .refresh-tip-row.fail .refresh-tip-detail { color: var(--red); }
     .map-table {
       width: 100%;
       border-collapse: separate;
@@ -1264,13 +1357,13 @@
       </div>
       <div class="step-body" id="step1-body">
       <label for="pl-key">ProjectionLab API Key</label>
-      <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
-      <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">
+      <div class="key-row">
+        <input type="password" id="pl-key" placeholder="Paste your ProjectionLab plugin API key" autocomplete="off" />
         <button type="button" class="btn btn-primary" id="save-key">Save Key</button>
         <button type="button" class="btn btn-secondary" id="clear-key">Clear API Key</button>
         <span id="key-saved-msg" class="load-status" style="font-size:13px;color:var(--muted)"></span>
       </div>
+      <p class="hint">Find it in ProjectionLab → Account Settings → Plugins → Enable Plugins</p>
       <div class="ea-toggle-field">
         <span class="ea-toggle-label">Opt in to ProjectionLab Early Access</span>
         <label class="switch">
@@ -1290,28 +1383,41 @@
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="step-body" id="step2-body">
-      <p class="hint" style="margin-bottom:8px">
+      <p class="hint" style="margin-bottom:14px">
         Load in your accounts from Monarch and ProjectionLab. After loaded, they are cached so you don't need to reload on every visit.
       </p>
-      <ul class="hint" style="margin-top:0;margin-bottom:12px;padding-left:18px">
-        <li>Before you click the Monarch button, make sure you have a tab open with the Monarch home page.</li>
-        <li>Before you click the ProjectionLab button, make sure you have a tab open with the ProjectionLab home page.</li>
-      </ul>
-      <div style="display:flex;flex-wrap:wrap;gap:24px 16px;align-items:flex-start">
-        <div class="load-btn-group">
-          <button type="button" class="btn btn-primary btn-monarch" id="load-accounts">
-            <img class="btn-icon" src="" alt="" />
-            <span class="btn-text">Load Monarch Accounts</span>
-          </button>
-          <div id="load-status-monarch" class="load-status" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:1.4em"></div>
-        </div>
-        <div class="load-btn-group">
-          <button type="button" class="btn btn-primary btn-pl" id="load-pl-accounts">
-            <img class="btn-icon" src="" alt="" />
-            <span class="btn-text">Load ProjectionLab Accounts</span>
-          </button>
-          <div id="load-status-pl" class="load-status" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:1.4em"></div>
-        </div>
+      <div class="conn-grid">
+        <section class="conn-card conn-monarch" id="conn-monarch" aria-label="Monarch (source)">
+          <div class="conn-head">
+            <img class="conn-logo" id="conn-logo-monarch" src="" alt="" />
+            <div class="conn-title">
+              <div class="conn-name">Monarch</div>
+              <div class="conn-role">Source</div>
+            </div>
+            <button type="button" class="refresh-history-btn" id="refresh-history-monarch" data-source="monarch" aria-label="Recent Monarch account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+          </div>
+          <div class="conn-count" id="conn-count-monarch"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span></div>
+          <div id="load-status-monarch" class="load-status conn-status"></div>
+          <div class="load-progress load-progress-monarch" id="load-progress-monarch" role="progressbar" aria-label="Loading Monarch accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
+          <button type="button" class="btn btn-primary btn-monarch conn-btn" id="load-accounts"><span class="btn-text">Load accounts</span></button>
+          <p class="conn-needs">Needs app.monarch.com open in a tab.</p>
+        </section>
+        <div class="conn-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></div>
+        <section class="conn-card conn-pl" id="conn-pl" aria-label="ProjectionLab (destination)">
+          <div class="conn-head">
+            <img class="conn-logo" id="conn-logo-pl" src="" alt="" />
+            <div class="conn-title">
+              <div class="conn-name">ProjectionLab</div>
+              <div class="conn-role">Destination</div>
+            </div>
+            <button type="button" class="refresh-history-btn" id="refresh-history-pl" data-source="pl" aria-label="Recent ProjectionLab account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+          </div>
+          <div class="conn-count" id="conn-count-pl"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span></div>
+          <div id="load-status-pl" class="load-status conn-status"></div>
+          <div class="load-progress load-progress-pl" id="load-progress-pl" role="progressbar" aria-label="Loading ProjectionLab accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
+          <button type="button" class="btn btn-primary btn-pl conn-btn" id="load-pl-accounts"><span class="btn-text">Load accounts</span></button>
+          <p class="conn-needs">Needs ProjectionLab open in a tab, on your plan or dashboard.</p>
+        </section>
       </div>
       </div>
     </div>

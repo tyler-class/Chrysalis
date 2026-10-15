@@ -610,6 +610,8 @@
       if (card.classList.contains('advanced-locked')) return;
       if (!confirm('Clear all cached data? You will need to load Monarch and ProjectionLab accounts again. Your API key and saved mappings will be kept.')) return;
       await chrome.storage.local.clear();
+      refreshHistory.monarch = [];
+      refreshHistory.pl = [];
       monarchAccounts = [];
       plAccounts = [];
       updateChips();
@@ -645,6 +647,8 @@
       splitMeta = {};
       await persistSplitMeta();
       await chrome.storage.local.clear();
+      refreshHistory.monarch = [];
+      refreshHistory.pl = [];
       updateChips();
       updateStepComplete('step1', false);
       updateStepComplete('step2', false);
@@ -793,18 +797,14 @@
   function restoreStep2Buttons() {
     const monarchBtn = document.getElementById('load-accounts');
     const plBtn = document.getElementById('load-pl-accounts');
-    if (monarchBtn) {
-      monarchBtn.innerHTML = `<img class="btn-icon" src="${getStep2IconUrl('monarch-icon.png')}" alt="" /><span class="btn-text"></span>`;
-    }
-    if (plBtn) {
-      plBtn.innerHTML = `<img class="btn-icon" src="${getStep2IconUrl('projectionLab-icon.png')}" alt="" /><span class="btn-text"></span>`;
-    }
+    if (monarchBtn) monarchBtn.innerHTML = '<span class="btn-text"></span>';
+    if (plBtn) plBtn.innerHTML = '<span class="btn-text"></span>';
     updateStep2Buttons();
   }
 
   function setStep2ButtonIconUrls() {
-    const monarchImg = document.querySelector('#load-accounts .btn-icon');
-    const plImg = document.querySelector('#load-pl-accounts .btn-icon');
+    const monarchImg = document.getElementById('conn-logo-monarch');
+    const plImg = document.getElementById('conn-logo-pl');
     if (monarchImg) monarchImg.src = getStep2IconUrl('monarch-icon.png');
     if (plImg) plImg.src = getStep2IconUrl('projectionLab-icon.png');
   }
@@ -821,8 +821,19 @@
     const plBtn = document.getElementById('load-pl-accounts');
     const monarchText = monarchBtn?.querySelector('.btn-text');
     const plText = plBtn?.querySelector('.btn-text');
-    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh Monarch Accounts' : 'Load Monarch Accounts';
-    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh ProjectionLab Accounts' : 'Load ProjectionLab Accounts';
+    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh accounts' : 'Load accounts';
+    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh accounts' : 'Load accounts';
+    updateConnCard('monarch', monarchAccounts.length);
+    updateConnCard('pl', plAccounts.length);
+  }
+
+  /** The account count on a Step 2 card; a green dot once something is loaded. */
+  function updateConnCard(source, count) {
+    const card = document.getElementById(`conn-${source}`);
+    if (!card) return;
+    card.classList.toggle('is-loaded', count > 0);
+    card.querySelector('.conn-count-text').textContent =
+      count > 0 ? `${count} account${count === 1 ? '' : 's'} loaded` : 'Not loaded yet';
   }
 
   // For now, keep saved mappings exactly as they were persisted.
@@ -833,8 +844,17 @@
   async function loadStorage() {
     const [sync, local] = await Promise.all([
       chrome.storage.sync.get(['plApiKey']),
-      chrome.storage.local.get(['cachedMonarchAccounts', 'cachedPLAccounts', 'lastMonarchRefreshTime', 'lastPLRefreshTime']),
+      chrome.storage.local.get([
+        'cachedMonarchAccounts',
+        'cachedPLAccounts',
+        'lastMonarchRefreshTime',
+        'lastPLRefreshTime',
+        REFRESH_HISTORY_KEYS.monarch,
+        REFRESH_HISTORY_KEYS.pl,
+      ]),
     ]);
+    refreshHistory.monarch = local[REFRESH_HISTORY_KEYS.monarch] || [];
+    refreshHistory.pl = local[REFRESH_HISTORY_KEYS.pl] || [];
     let rawMappings = [];
     try {
       rawMappings = await loadMappingsFromStorage();
@@ -1142,6 +1162,9 @@
   const LOAD_ACCOUNTS_TIMEOUT_MS = 60000;
   const LOAD_STATUS_SHOW_MS = 3000;
   const LOAD_STATUS_FADE_MS = 1000;
+  const REFRESH_HISTORY_LIMIT = 5;
+  const REFRESH_HISTORY_KEYS = { monarch: 'monarchRefreshHistory', pl: 'plRefreshHistory' };
+  const refreshHistory = { monarch: [], pl: [] };
 
   function formatLastRefreshed(ts) {
     if (!ts) return '';
@@ -1157,16 +1180,6 @@
     const now = Date.now();
     chrome.storage.local.set({ [storageKey]: now });
     statusEl.textContent = formatLastRefreshed(now);
-  }
-
-  /**
-   * A failed load must not look like a refresh: after the error fades, show the time of the
-   * last load that actually succeeded (or nothing if there hasn't been one).
-   */
-  async function showPreviousRefresh(statusEl, storageKey) {
-    let ts = null;
-    try { ts = (await chrome.storage.local.get([storageKey]))[storageKey]; } catch (_) {}
-    statusEl.textContent = formatLastRefreshed(ts);
   }
 
   function setFinalLoadStatus(statusEl, text, onAfterFade) {
@@ -1191,26 +1204,142 @@
     }, LOAD_STATUS_SHOW_MS);
   }
 
+  /**
+   * Success or failure of a Step 2 load, as a colored pill. Success fades back to "Last refreshed"
+   * like before; a failure stays on screen until the next attempt so it can't be missed.
+   */
+  function setLoadOutcome(statusEl, outcome, text, onAfterFade) {
+    clearLoadOutcome(statusEl);
+    statusEl.classList.add(outcome === 'ok' ? 'is-ok' : 'is-fail');
+    statusEl.closest('.conn-card')?.classList.toggle('is-error', outcome !== 'ok');
+    statusEl.setAttribute('role', outcome === 'ok' ? 'status' : 'alert');
+    statusEl.append(el('span', 'load-status-icon', outcome === 'ok' ? '✓' : '✕'), el('span', null, text));
+    if (outcome !== 'ok') return;
+    statusEl._fadeTimeout1 = setTimeout(() => {
+      statusEl._fadeTimeout1 = null;
+      statusEl.classList.add('load-status-fade-out');
+      statusEl._fadeTimeout2 = setTimeout(() => {
+        statusEl._fadeTimeout2 = null;
+        clearLoadOutcome(statusEl);
+        onAfterFade();
+      }, LOAD_STATUS_FADE_MS);
+    }, LOAD_STATUS_SHOW_MS);
+  }
+
+  function clearLoadOutcome(statusEl) {
+    if (statusEl._fadeTimeout1) clearTimeout(statusEl._fadeTimeout1);
+    if (statusEl._fadeTimeout2) clearTimeout(statusEl._fadeTimeout2);
+    statusEl._fadeTimeout1 = statusEl._fadeTimeout2 = null;
+    statusEl.classList.remove('is-ok', 'is-fail', 'load-status-fade-out');
+    statusEl.closest('.conn-card')?.classList.remove('is-error');
+    statusEl.removeAttribute('role');
+    statusEl.textContent = '';
+  }
+
+  /**
+   * Progress bar under a Step 2 button. The fetch itself reports nothing, so the bar eases toward
+   * 90% over roughly `expectedMs`, never below the floor of the last step reached.
+   */
+  function startLoadProgress(source, expectedMs) {
+    const bar = document.getElementById(`load-progress-${source}`);
+    const fill = bar.querySelector('.load-progress-fill');
+    const started = Date.now();
+    let floor = 4;
+    let shown = 0;
+    const paint = () => {
+      const eased = 90 * (1 - Math.exp(-(Date.now() - started) / expectedMs));
+      shown = Math.max(shown, floor, eased);
+      fill.style.width = `${shown}%`;
+      bar.setAttribute('aria-valuenow', String(Math.round(shown)));
+    };
+    if (bar._hideTimer) clearTimeout(bar._hideTimer);
+    bar.classList.remove('is-ok', 'is-fail');
+    fill.style.transition = 'none';
+    fill.style.width = '0';
+    bar.hidden = false;
+    void fill.offsetWidth; // restart from empty, then let the width transition run again
+    fill.style.transition = '';
+    paint();
+    const timer = setInterval(paint, 250);
+    return {
+      step(pct) { floor = Math.max(floor, pct); paint(); },
+      finish(outcome) {
+        clearInterval(timer);
+        bar.classList.add(outcome === 'ok' ? 'is-ok' : 'is-fail');
+        fill.style.width = '100%';
+        bar.setAttribute('aria-valuenow', '100');
+        bar._hideTimer = setTimeout(() => { bar.hidden = true; }, 1500);
+      },
+    };
+  }
+
+  /** Newest first, at most REFRESH_HISTORY_LIMIT per source; older runs fall off. */
+  async function recordRefresh(source, entry) {
+    refreshHistory[source] = [{ time: Date.now(), ...entry }, ...refreshHistory[source]].slice(0, REFRESH_HISTORY_LIMIT);
+    try {
+      await chrome.storage.local.set({ [REFRESH_HISTORY_KEYS[source]]: refreshHistory[source] });
+    } catch (e) {
+      console.warn('[Chrysalis] Could not save refresh history:', e);
+    }
+  }
+
+  const REFRESH_TIME_FMT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+  function buildRefreshHistoryTip(source) {
+    const box = el('div');
+    box.appendChild(el('div', 'refresh-tip-title', `Recent ${source === 'monarch' ? 'Monarch' : 'ProjectionLab'} loads`));
+    const entries = refreshHistory[source];
+    if (!entries.length) box.appendChild(el('div', 'refresh-tip-empty', 'No loads yet.'));
+    for (const e of entries) {
+      const ok = !e.error;
+      const row = el('div', `refresh-tip-row ${ok ? 'ok' : 'fail'}`);
+      row.appendChild(el('span', 'refresh-tip-icon', ok ? '✓' : '✕'));
+      const body = el('div');
+      body.appendChild(el('div', 'refresh-tip-time', REFRESH_TIME_FMT.format(e.time)));
+      body.appendChild(el('div', 'refresh-tip-detail', ok ? `${e.count} account${e.count === 1 ? '' : 's'} loaded` : e.error));
+      row.appendChild(body);
+      box.appendChild(row);
+    }
+    return box;
+  }
+
+  for (const source of ['monarch', 'pl']) {
+    const btn = document.getElementById(`refresh-history-${source}`);
+    btn._buildTip = () => buildRefreshHistoryTip(source);
+    attachTip(btn);
+    btn.addEventListener('focus', () => showTip(btn));
+    btn.addEventListener('blur', hideTip);
+  }
+
   document.getElementById('load-accounts').onclick = async () => {
     const btn = document.getElementById('load-accounts');
     const status = document.getElementById('load-status-monarch');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Loading…';
+    clearLoadOutcome(status);
     status.textContent = 'Contacting Monarch… (can take 30–60 sec while we try auth options)';
+    const progress = startLoadProgress('monarch', 20000);
+    const fail = (message) => {
+      progress.finish('fail');
+      setLoadOutcome(status, 'fail', message);
+      recordRefresh('monarch', { error: message });
+    };
 
     try {
       const monarchTab = await findMonarchTab();
       if (!monarchTab) {
-        setFinalLoadStatus(status, 'Open a tab to app.monarch.com first.', () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
+        fail('Open a tab to app.monarch.com first.');
         return;
       }
 
+      progress.step(10);
       status.textContent = 'Fetching Monarch accounts… (can take 30–60 sec)';
 
       await chrome.scripting.executeScript({
         target: { tabId: monarchTab.id },
         files: ['content-scripts/monarch.js'],
       });
+      progress.step(20);
 
       const monarchPromise = chrome.tabs.sendMessage(monarchTab.id, { type: 'FETCH_ACCOUNTS' });
       const timeoutPromise = new Promise((_, reject) => {
@@ -1222,18 +1351,20 @@
         monarchAccounts = monarchRes.accounts || [];
         await chrome.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
         reconcileMappingsWithAccounts();
-        setFinalLoadStatus(status, `Loaded ${monarchAccounts.length} Monarch accounts.`, () => markRefreshed(status, 'lastMonarchRefreshTime'));
+        progress.finish('ok');
+        setLoadOutcome(status, 'ok', `Loaded ${monarchAccounts.length} Monarch accounts.`, () => markRefreshed(status, 'lastMonarchRefreshTime'));
+        recordRefresh('monarch', { count: monarchAccounts.length });
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
         renderMappingRows();
       } else {
-        setFinalLoadStatus(status, 'Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'), () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
+        fail('Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'));
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
       }
     } catch (e) {
       if (e.message === 'timeout') {
-        setFinalLoadStatus(status, 'Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.', () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
+        fail('Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.');
       } else {
-        setFinalLoadStatus(status, 'Error: ' + (e.message || String(e)), () => showPreviousRefresh(status, 'lastMonarchRefreshTime'));
+        fail('Error: ' + (e.message || String(e)));
       }
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
     } finally {
@@ -1247,17 +1378,24 @@
     const status = document.getElementById('load-status-pl');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Loading…';
+    clearLoadOutcome(status);
     status.textContent = 'Fetching ProjectionLab accounts…';
+    const progress = startLoadProgress('pl', 3000);
 
     try {
       plAccounts = await fetchPLAccounts();
       await chrome.storage.local.set({ cachedPLAccounts: plAccounts });
       reconcileMappingsWithAccounts();
-      setFinalLoadStatus(status, `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => markRefreshed(status, 'lastPLRefreshTime'));
+      progress.finish('ok');
+      setLoadOutcome(status, 'ok', `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => markRefreshed(status, 'lastPLRefreshTime'));
+      recordRefresh('pl', { count: plAccounts.length });
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
       renderMappingRows();
     } catch (e) {
-      setFinalLoadStatus(status, 'ProjectionLab: ' + (e.message || String(e)), () => showPreviousRefresh(status, 'lastPLRefreshTime'));
+      const message = 'ProjectionLab: ' + (e.message || String(e));
+      progress.finish('fail');
+      setLoadOutcome(status, 'fail', message);
+      recordRefresh('pl', { error: message });
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
     } finally {
       restoreStep2Buttons();
@@ -2827,10 +2965,10 @@
 
   function showTip(anchor) {
     const text = anchor.dataset.tip;
-    if (!text) { hideTip(); return; }
+    if (!text && !anchor._buildTip) { hideTip(); return; }
     tipEl._ownerCard = anchor.closest('.step-card');
     tipEl.innerHTML = '';
-    tipEl.appendChild(el('div', 'note-pop-text', text));
+    tipEl.appendChild(anchor._buildTip ? anchor._buildTip() : el('div', 'note-pop-text', text));
     tipEl.hidden = false;
     placeFloating(tipEl, anchor.getBoundingClientRect(), 6, 0);
   }
