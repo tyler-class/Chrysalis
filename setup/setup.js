@@ -623,7 +623,7 @@
 
     document.getElementById('clear-cache').addEventListener('click', async () => {
       if (card.classList.contains('advanced-locked')) return;
-      if (!confirm('Clear all cached data? You will need to load Monarch and ProjectionLab accounts again. Your API key and saved mappings will be kept.')) return;
+      if (!confirm('Clear all cached data? You will need to sync Monarch and ProjectionLab accounts again. Your API key and saved mappings will be kept.')) return;
       await chrome.storage.local.clear();
       refreshHistory.monarch = [];
       refreshHistory.pl = [];
@@ -632,7 +632,7 @@
       monarchAccounts = [];
       plAccounts = [];
       updateChips();
-      updateStepComplete('step2', false);
+      refreshStep2Status();
       updateStep2Buttons();
       renderMappingRows();
     });
@@ -670,7 +670,7 @@
       showLastRefreshed('pl', null);
       updateChips();
       updateStepComplete('step1', false);
-      updateStepComplete('step2', false);
+      refreshStep2Status();
       updateStepComplete('step3', false);
       setStepCollapsed('step1', false);
       updateStep2Buttons();
@@ -747,6 +747,40 @@
     updateReadyPill();
   }
 
+  /** Sources whose most recent account sync failed, e.g. [{ name: 'Monarch', error }]. */
+  function latestSyncErrors() {
+    const out = [];
+    for (const [source, name] of [['monarch', 'Monarch'], ['pl', 'ProjectionLab']]) {
+      const last = refreshHistory[source][0];
+      if (last && last.error) out.push({ name, error: last.error });
+    }
+    return out;
+  }
+
+  /**
+   * Sync Accounts is done only when both sides have accounts and the latest sync on each
+   * succeeded. A failed latest sync puts the section (and the Ready pill) in an error state
+   * until a sync on that side succeeds again. Returns whether the step is complete.
+   */
+  function refreshStep2Status() {
+    const errors = latestSyncErrors();
+    const card = document.getElementById('step2');
+    const num = card && card.querySelector('.step-num');
+    const complete = monarchAccounts.length > 0 && plAccounts.length > 0 && !errors.length;
+    if (card) card.classList.toggle('sync-error', errors.length > 0);
+    if (num) {
+      if (errors.length) {
+        num.dataset.tip = errors.map((e) => `Last ${e.name} sync failed: ${e.error}`).join('\n');
+        num.setAttribute('aria-label', num.dataset.tip);
+      } else {
+        delete num.dataset.tip;
+        num.removeAttribute('aria-label');
+      }
+    }
+    updateStepComplete('step2', complete);
+    return complete;
+  }
+
   /**
    * A finished Map Accounts step shows an amber warning instead of the green check while
    * any split Monarch account's shares don't total 100% (under, over or missing a percentage).
@@ -774,6 +808,19 @@
   function updateReadyPill() {
     const pill = document.getElementById('chip-ready');
     if (!pill) return;
+    // A failed latest account sync turns the pill red instead of hiding it, so it's obvious why
+    // Chrysalis isn't ready.
+    const errors = latestSyncErrors();
+    pill.classList.toggle('err', errors.length > 0);
+    pill.classList.toggle('ok', !errors.length);
+    document.getElementById('chip-ready-text').textContent = errors.length ? 'Account sync failed' : 'Ready to Sync';
+    document.getElementById('chip-how-btn').hidden = errors.length > 0;
+    if (errors.length) {
+      pill.dataset.tip = errors.map((e) => `Last ${e.name} sync failed: ${e.error}`).join('\n');
+      pill.style.display = '';
+      return;
+    }
+    delete pill.dataset.tip;
     const allComplete = ['step1', 'step2', 'step3'].every((id) => {
       const c = document.getElementById(id);
       return c && c.classList.contains('complete');
@@ -840,19 +887,42 @@
     const plBtn = document.getElementById('load-pl-accounts');
     const monarchText = monarchBtn?.querySelector('.btn-text');
     const plText = plBtn?.querySelector('.btn-text');
-    if (monarchText) monarchText.textContent = monarchAccounts.length > 0 ? 'Refresh accounts' : 'Load accounts';
-    if (plText) plText.textContent = plAccounts.length > 0 ? 'Refresh accounts' : 'Load accounts';
-    updateConnCard('monarch', monarchAccounts.length);
-    updateConnCard('pl', plAccounts.length);
+    if (monarchText) monarchText.textContent = 'Sync accounts';
+    if (plText) plText.textContent = 'Sync accounts';
+    updateConnCard('monarch');
+    updateConnCard('pl');
   }
 
-  /** The account count on a Step 2 card; a green dot once something is loaded. */
-  function updateConnCard(source, count) {
+  function accountsLabel(n) {
+    return `${n} account${n === 1 ? '' : 's'}`;
+  }
+
+  /** When each side last synced successfully (shown on its card). */
+  const lastSyncedAt = { monarch: null, pl: null };
+
+  /**
+   * The status line on a Step 2 card. It always reflects the latest sync: after a success,
+   * "N accounts synced · Last synced …"; after a failure, "Last sync failed · when", with a
+   * note that the accounts from the last successful sync are still the ones in use.
+   */
+  function updateConnCard(source) {
     const card = document.getElementById(`conn-${source}`);
     if (!card) return;
-    card.classList.toggle('is-loaded', count > 0);
+    const count = source === 'monarch' ? monarchAccounts.length : plAccounts.length;
+    const last = refreshHistory[source][0];
+    const failed = !!(last && last.error);
+    card.classList.toggle('is-loaded', count > 0 && !failed);
+    card.classList.toggle('is-error', failed);
     card.querySelector('.conn-count-text').textContent =
-      count > 0 ? `${count} account${count === 1 ? '' : 's'} loaded` : 'Not loaded yet';
+      failed ? 'Last sync failed' : count > 0 ? `${accountsLabel(count)} synced` : 'Not synced yet';
+    document.getElementById(`conn-refreshed-${source}`).textContent = failed
+      ? formatAgo(last.time)
+      : lastSyncedAt[source] ? `Last synced: ${formatAgo(lastSyncedAt[source])}` : '';
+    const stale = document.getElementById(`conn-stale-${source}`);
+    stale.hidden = !(failed && count > 0);
+    stale.textContent = failed && count > 0
+      ? `Still using ${accountsLabel(count)} from the last successful sync${lastSyncedAt[source] ? `, ${formatAgo(lastSyncedAt[source])}` : ''}.`
+      : '';
   }
 
   // For now, keep saved mappings exactly as they were persisted.
@@ -905,13 +975,16 @@
     const step1Complete = !!(plApiKey && plApiKey.trim());
     updateStepComplete('step1', step1Complete);
     if (step1Complete) setStepCollapsed('step1', true);
-    const step2Complete = monarchAccounts.length > 0 && plAccounts.length > 0;
-    updateStepComplete('step2', step2Complete);
-    if (step2Complete) setStepCollapsed('step2', true);
+    if (refreshStep2Status()) setStepCollapsed('step2', true);
     updateStep2Buttons();
     renderMappingRows();
     showLastRefreshed('monarch', local.lastMonarchRefreshTime);
     showLastRefreshed('pl', local.lastPLRefreshTime);
+    // A failed latest sync keeps its red message after a reload, not just until the page closes.
+    for (const source of ['monarch', 'pl']) {
+      const last = refreshHistory[source][0];
+      if (last && last.error) setLoadOutcome(document.getElementById(`load-status-${source}`), 'fail', last.error);
+    }
     const step3Complete = accountMappings.length > 0 && accountMappings.every((m) => {
       if (!m.plId) return false;
       if (isAssetWithLoanMapping(m)) {
@@ -933,7 +1006,7 @@
     plApiKey = key;
     await chrome.storage.sync.set({ plApiKey: key });
     // A saved key may belong to a different instance than the previously cached
-    // one — drop the cache so the next "Load Accounts" re-runs detection.
+    // one — drop the cache so the next "Sync Accounts" re-runs detection.
     await clearCachedPLOrigin();
     updateChips();
     updateStepComplete('step1', true);
@@ -1034,7 +1107,7 @@
     try {
       opened = await findOrOpenPLTabForOrigin(origin, { openInBackground: true });
     } catch (e) {
-      return { success: false, fallThrough: false, error: `Could not open ${origin}: ${e.message || String(e)}` };
+      return { success: false, fallThrough: false, error: `Couldn't open ${origin.replace('https://', '')}: ${e.message || String(e)}` };
     }
     const { tab, openedByUs } = opened;
 
@@ -1043,7 +1116,7 @@
       const scriptResults = await runPLExportScript(tab.id, apiKey);
       const payload = scriptResults && scriptResults[0] && scriptResults[0].result;
       if (!payload) {
-        outcome = { success: false, fallThrough: false, error: `Could not run script on ${origin} tab.` };
+        outcome = { success: false, fallThrough: false, error: "Couldn't reach the ProjectionLab tab. Refresh it and try again." };
       } else if (payload.error === 'not_ready') {
         // Plugin API never appeared. If we opened the tab ourselves, treat this as
         // "user has no account on this instance" (e.g. ea.* bounced them to sign-in)
@@ -1052,7 +1125,7 @@
         outcome = {
           success: false,
           fallThrough: openedByUs,
-          error: `ProjectionLab plugin API not ready on ${origin}.`,
+          error: "ProjectionLab isn't ready. Open your plan or dashboard (not Settings) with Plugins enabled, then try again.",
         };
       } else if (payload.error) {
         try { console.log('[Chrysalis] detect probe error', origin, payload.error); } catch (_) {}
@@ -1096,12 +1169,10 @@
         return { origin, accounts: probe.accounts };
       }
       if (probe.fallThrough) continue;
-      throw new Error(probe.error || 'Unknown ProjectionLab error');
+        throw new Error(probe.error || "Couldn't sync ProjectionLab accounts.");
     }
     const hostList = origins.map((o) => o.replace('https://', '')).join(' or ');
-    throw new Error(
-      `Your ProjectionLab API key wasn't accepted by ${hostList}. Double-check the key and try again.`
-    );
+    throw new Error(`ProjectionLab (${hostList}) didn't accept your API key. Check it in Step 1.`);
   }
 
   function runPLExportScript(tabId, apiKey) {
@@ -1138,7 +1209,7 @@
 
   async function fetchPLAccounts() {
     const key = plApiKey && plApiKey.trim() ? plApiKey : (await chrome.storage.sync.get(['plApiKey'])).plApiKey;
-    if (!key) throw new Error('Save your ProjectionLab API key first.');
+    if (!key) throw new Error('Save your API key in Step 1 first.');
 
     // Detect which instance this key belongs to (or use cached origin).
     // On a cold-start probe success, detection already ran exportData and
@@ -1151,14 +1222,14 @@
     for (let attempt = 1; attempt <= PL_API_RETRIES; attempt++) {
       const results = await runPLExportScript(plTab.id, key);
       const payload = results && results[0] && results[0].result;
-      if (!payload) throw new Error('Could not run script on ProjectionLab tab.');
+      if (!payload) throw new Error("Couldn't reach the ProjectionLab tab. Refresh it and try again.");
       if (payload.error === 'not_ready') {
         if (attempt < PL_API_RETRIES) {
           await new Promise((r) => setTimeout(r, PL_API_RETRY_MS));
           continue;
         }
         throw new Error(
-          'ProjectionLab plugin API not ready. Use a tab on the main app (your plan or dashboard at app.projectionlab.com or ea.projectionlab.com), not the Plugins settings page. Sign in, enable Plugins in Account Settings if needed, then open your plan or dashboard and try again.'
+          "ProjectionLab isn't ready. Open your plan or dashboard (not Settings) with Plugins enabled, then try again."
         );
       }
       if (payload.error) {
@@ -1179,19 +1250,18 @@
   const REFRESH_HISTORY_KEYS = { monarch: 'monarchRefreshHistory', pl: 'plRefreshHistory' };
   const refreshHistory = { monarch: [], pl: [] };
 
-  function formatLastRefreshed(ts) {
-    if (!ts) return '';
+  function formatAgo(ts) {
     const sec = (Date.now() - ts) / 1000;
-    if (sec < 60) return 'Last refreshed: just now';
-    if (sec < 120) return 'Last refreshed: 1 min ago';
-    if (sec < 3600) return `Last refreshed: ${Math.floor(sec / 60)} min ago`;
-    return 'Last refreshed: ' + new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    if (sec < 60) return 'just now';
+    if (sec < 120) return '1 min ago';
+    if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+    return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  /** "Last refreshed: …" beside the account count on a Step 2 card (blank when never loaded). */
+  /** Record when a side last synced successfully (null when never) and redraw its card. */
   function showLastRefreshed(source, ts) {
-    const node = document.getElementById(`conn-refreshed-${source}`);
-    if (node) node.textContent = formatLastRefreshed(ts);
+    lastSyncedAt[source] = ts || null;
+    updateConnCard(source);
   }
 
   /** A successful load: record the time and show it on the card. */
@@ -1306,16 +1376,16 @@
 
   function buildRefreshHistoryTip(source) {
     const box = el('div');
-    box.appendChild(el('div', 'refresh-tip-title', `Recent ${source === 'monarch' ? 'Monarch' : 'ProjectionLab'} loads`));
+    box.appendChild(el('div', 'refresh-tip-title', `Recent ${source === 'monarch' ? 'Monarch' : 'ProjectionLab'} syncs`));
     const entries = refreshHistory[source];
-    if (!entries.length) box.appendChild(el('div', 'refresh-tip-empty', 'No loads yet.'));
+    if (!entries.length) box.appendChild(el('div', 'refresh-tip-empty', 'No syncs yet.'));
     for (const e of entries) {
       const ok = !e.error;
       const row = el('div', `refresh-tip-row ${ok ? 'ok' : 'fail'}`);
       row.appendChild(el('span', 'refresh-tip-icon', ok ? '✓' : '✕'));
       const body = el('div');
       body.appendChild(el('div', 'refresh-tip-time', REFRESH_TIME_FMT.format(e.time)));
-      body.appendChild(el('div', 'refresh-tip-detail', ok ? `${e.count} account${e.count === 1 ? '' : 's'} loaded` : e.error));
+      body.appendChild(el('div', 'refresh-tip-detail', ok ? `${accountsLabel(e.count)} synced` : e.error));
       row.appendChild(body);
       box.appendChild(row);
     }
@@ -1334,9 +1404,9 @@
     const btn = document.getElementById('load-accounts');
     const status = document.getElementById('load-status-monarch');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Loading…';
+    btn.innerHTML = '<span class="spinner"></span> Syncing…';
     clearLoadOutcome(status);
-    status.textContent = 'Contacting Monarch… (can take 30–60 sec while we try auth options)';
+    status.textContent = 'Contacting Monarch…';
     const progress = startLoadProgress('monarch', 20000);
     const fail = (message) => {
       progress.finish('fail');
@@ -1347,12 +1417,12 @@
     try {
       const monarchTab = await findMonarchTab();
       if (!monarchTab) {
-        fail('Open a tab to app.monarch.com first.');
+        fail('Open app.monarch.com in a tab first.');
         return;
       }
 
       progress.step(10);
-      status.textContent = 'Fetching Monarch accounts… (can take 30–60 sec)';
+      status.textContent = 'Fetching Monarch accounts…';
 
       await chrome.scripting.executeScript({
         target: { tabId: monarchTab.id },
@@ -1372,23 +1442,24 @@
         reconcileMappingsWithAccounts();
         progress.finish('ok');
         markRefreshed('monarch', 'lastMonarchRefreshTime');
-        setLoadOutcome(status, 'ok', `Loaded ${monarchAccounts.length} Monarch accounts.`);
+        setLoadOutcome(status, 'ok', `Synced ${accountsLabel(monarchAccounts.length)}.`);
         recordRefresh('monarch', { count: monarchAccounts.length });
-        updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
+        refreshStep2Status();
         renderMappingRows();
       } else {
-        fail('Monarch: ' + (monarchRes?.error || 'Failed to load accounts.'));
-        updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
+        fail(monarchRes?.error || "Couldn't sync Monarch accounts.");
+        refreshStep2Status();
       }
     } catch (e) {
       if (e.message === 'timeout') {
-        fail('Timed out after 60 seconds. Try again or refresh the Monarch tab and try again.');
+        fail('Monarch timed out. Refresh the Monarch tab and try again.');
       } else {
-        fail('Error: ' + (e.message || String(e)));
+        fail(e.message || String(e));
       }
-      updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
+      refreshStep2Status();
     } finally {
       restoreStep2Buttons();
+      refreshStep2Status();
       btn.disabled = false;
     }
   };
@@ -1397,7 +1468,7 @@
     const btn = document.getElementById('load-pl-accounts');
     const status = document.getElementById('load-status-pl');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Loading…';
+    btn.innerHTML = '<span class="spinner"></span> Syncing…';
     clearLoadOutcome(status);
     status.textContent = 'Fetching ProjectionLab accounts…';
     const progress = startLoadProgress('pl', 3000);
@@ -1408,18 +1479,19 @@
       reconcileMappingsWithAccounts();
       progress.finish('ok');
       markRefreshed('pl', 'lastPLRefreshTime');
-      setLoadOutcome(status, 'ok', `Loaded ${plAccounts.length} ProjectionLab accounts.`);
+      setLoadOutcome(status, 'ok', `Synced ${accountsLabel(plAccounts.length)}.`);
       recordRefresh('pl', { count: plAccounts.length });
-      updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
+      refreshStep2Status();
       renderMappingRows();
     } catch (e) {
-      const message = 'ProjectionLab: ' + (e.message || String(e));
+      const message = e.message || String(e);
       progress.finish('fail');
       setLoadOutcome(status, 'fail', message);
       recordRefresh('pl', { error: message });
-      updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
+      refreshStep2Status();
     } finally {
       restoreStep2Buttons();
+      refreshStep2Status();
       btn.disabled = false;
     }
   };
@@ -1498,7 +1570,7 @@
       const isAppUrl = r.url && !r.url.includes('/docs') && !r.url.includes('/settings');
       const hint = !r.hasAPI
         ? isAppUrl
-          ? 'API not loaded yet. Ensure Plugins are enabled (Account Settings → Plugins), refresh this tab, wait for the app to load, then try Load Accounts — the extension will wait up to 20s for the API.'
+          ? 'API not loaded yet. Ensure Plugins are enabled (Account Settings → Plugins), refresh this tab, wait for the app to load, then try Sync Accounts — the extension will wait up to 20s for the API.'
           : 'This tab is not the app. Use a tab on the main ProjectionLab app (your plan/dashboard at app.projectionlab.com or ea.projectionlab.com), not /docs/ or /settings/plugins.'
         : '';
       const lines = [
@@ -3039,6 +3111,8 @@
   attachTip(document.getElementById('chip-maps'));
   document.querySelectorAll('.header-links .help-icon-link').forEach((link) => attachTip(link, ICON_TIP_DELAY_MS));
   attachTip(document.querySelector('#step3 .step-num'));
+  attachTip(document.querySelector('#step2 .step-num'));
+  attachTip(document.getElementById('chip-ready'));
   // Point this tab at the mailto URL: Chrome hands it to the mail app and the setup page stays put.
   document.querySelectorAll('a[href^="mailto:"]').forEach((link) => {
     link.addEventListener('click', (e) => {
@@ -3104,7 +3178,7 @@
       el.classList.add('blocked');
       el.textContent = 'Won’t sync: share is 0%. Give it a share above 0 to sync.';
     } else if (plan.write && plan.sources.every((src) => src.status !== 'missing')) {
-      el.textContent = `Estimated sync ${USD_CENTS.format(plan.amountCents / 100)}, from last account refresh.`;
+      el.textContent = `Estimated sync ${USD_CENTS.format(plan.amountCents / 100)}, from last account sync.`;
     } else {
       return null;
     }
@@ -3179,7 +3253,7 @@
     const title = el('div', 'sp-title', `Split ${entry.name}`);
     title.id = 'split-panel-title';
     titles.appendChild(title);
-    titles.appendChild(el('div', 'sp-sub', balance != null ? `${USD_CENTS.format(balance)} at last account refresh` : ''));
+    titles.appendChild(el('div', 'sp-sub', balance != null ? `${USD_CENTS.format(balance)} at last account sync` : ''));
     const close = el('button', 'sp-close', '×');
     close.type = 'button';
     close.setAttribute('aria-label', 'Close');

@@ -76,17 +76,23 @@ See [Splitting an account](#splitting-an-account).
   Monarch accounts, the column headers show the Monarch and ProjectionLab logos, all
   hover tips share one style, and sections no longer jump on hover.
 
-<strong>Fast Follow v1.2.2: clearer account loading, easier support, and setup polish</strong>
+<strong>Fast Follow v1.2.2: clearer account syncing, easier support, and setup polish</strong>
 <br>
 
-- **Load Accounts shows Monarch → ProjectionLab side by side.** Each source gets its own
-  card with how many accounts are loaded and when they were last refreshed, laid out in
-  the same left-to-right order as the mapping table below it.
-- **You can see a load happening and how it ended.** A progress bar runs while accounts
-  load, then a green ✓ or a red ✕ with the error. Errors stay on screen and outline that
-  card in red until you try again.
-- **Load history:** hover the clock icon on either card to see its last 5 loads, with
-  the date and time and how many accounts loaded, or the error if it failed.
+- **Sync Accounts shows Monarch → ProjectionLab side by side.** Each source gets its own
+  card with how many accounts are synced and when they last synced, laid out in the same
+  left-to-right order as the mapping table below it. "Sync" is now the word used for this
+  step everywhere in Setup.
+- **You can see a sync happening and how it ended.** A progress bar runs while accounts
+  sync, with short status lines ("Contacting Monarch…", "Fetching Monarch accounts…"), then
+  a green ✓ or a red ✕ with a short, actionable error.
+- **Failed syncs are impossible to miss.** If the latest Monarch or ProjectionLab account
+  sync failed, that card says **Last sync failed** and notes which older accounts it's still
+  using, the Sync Accounts step shows a red ✕, the **Ready to Sync** pill turns into a red
+  **Account sync failed**, and the popup asks you to fix it in Setup before syncing
+  balances. The error stays until a sync on that side succeeds, even after a reload.
+- **Sync history:** hover the clock icon on either card to see its last 5 syncs, with
+  the date and time and how many accounts synced, or the error if it failed.
 - **Remove Split:** a red button in the split panel turns a split account back into a
   regular one. It stays on the row you opened the panel from, and its splits on other
   rows are removed.
@@ -94,8 +100,9 @@ See [Splitting an account](#splitting-an-account).
   and replaces the **?** in the top right of Setup, so you can email
   [chrysalis@tylerclass.net](mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback)
   in one click.
-- **Setup polish:** **Save Key** and **Clear API Key** sit beside the API key field, the
-  mapping table's column headers and logos are larger, and each open section has a
+- **Setup polish:** click anywhere on a section's header to open or close it (the whole
+  card when it's closed), **Save Key** and **Clear API Key** sit beside the API key field,
+  the mapping table's column headers and logos are larger, and each open section has a
   divider under its header that fades in and out with the drawer.
 - The extension's full name is now **Chrysalis: Monarch to ProjectionLab Sync**.
 
@@ -183,15 +190,15 @@ Paste it into the **ProjectionLab API Key** field in Chrysalis and click **Save 
 
 **ProjectionLab Early Access (optional):** Most people should skip this — by default Chrysalis uses the standard `app.projectionlab.com`. If your ProjectionLab account is enrolled in the Early Access program (`ea.projectionlab.com`), flip on the **Opt in to ProjectionLab Early Access** toggle (below the Save/Clear buttons) so account loading and balance syncs use the Early Access endpoint instead.
 
-### Step 2 — Load your accounts
+### Step 2 — Sync your accounts
 
 Before you can map anything, Chrysalis needs to fetch your account lists from both services.
 
-1. Make sure you're logged into Monarch Money. Have `app.monarchmoney.com` open in a tab
-2. Click **Load Accounts from Monarch**. You should see success text underneath the button
+1. Make sure you're logged into Monarch Money. Have `app.monarch.com` open in a tab
+2. On the **Monarch** card, click **Sync accounts**. A green ✓ shows when it's done
 3. Make sure you're logged into ProjectionLab in an open tab — `app.projectionlab.com`, or `ea.projectionlab.com` if you enabled Early Access in Step 1
-4. Click **Load Accounts from ProjectionLab**. You should see success text underneath the button
-5. Anytime you add/remove/rename accounts in either tool, come back to Setup the click the corresponding buttons, which will then say "Refresh Accounts from Monarch/ProjectionLab". Your mappings are keyed by ID and will be preserved even if you change the name of an account.
+4. On the **ProjectionLab** card, click **Sync accounts**. A green ✓ shows when it's done
+5. Anytime you add/remove/rename accounts in either tool, come back to Setup and click **Sync accounts** on that card again. Your mappings are keyed by ID and will be preserved even if you change the name of an account.
 
 ### Step 3 — Map your accounts
 

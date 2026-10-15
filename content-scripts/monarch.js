@@ -100,7 +100,7 @@
       const text = await res.text();
       return { error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
     }
-    return { error: 'All auth combinations returned 401. Monarch may have changed how they authenticate.' };
+    return { error: "Monarch didn't accept the sign-in. Refresh the Monarch tab and try again." };
   }
 
   const GET_ACCOUNTS_QUERY = `

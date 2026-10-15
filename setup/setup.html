@@ -179,6 +179,9 @@
     /* Mappings exist, but a split account's shares don't total 100%. */
     .chip.warn { border-color: rgba(180,83,9,.35); background: #fdf3e3; color: var(--warn); cursor: help; }
     .chip.warn .dot { background: var(--warn); }
+    /* The latest Monarch or ProjectionLab account sync failed. */
+    .chip.err { border-color: #fecaca; background: var(--red-bg); color: var(--red); cursor: help; }
+    .chip.err .dot { background: var(--red); }
     /* TODO(ui): the mapping-count chip text ("N Monarch → M ProjectionLab")
        is assembled as one string in setup.js (updateChips). To render the two
        figures as a Spline Mono stat with a highlighted background + green arrow
@@ -266,16 +269,19 @@
     /* Keep step 3's dropdowns above the cards that follow it (Advanced). */
     #step3 { position: relative; z-index: 2; }
     .step-card.complete { border-color: var(--good-line); background: var(--card); }
+    /* The header stretches over the card's padding so the whole strip above the rule is
+       clickable, and the whole card when it's closed. */
     .step-head {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 0;
-      padding-bottom: 16px;
+      margin: -24px -28px 0;
+      padding: 24px 28px 16px;
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
       cursor: pointer;
       user-select: none;
     }
-    .step-card.collapsed .step-head { margin-bottom: 0; padding-bottom: 0; }
+    .step-card.collapsed .step-head { margin-bottom: -24px; padding-bottom: 24px; border-radius: var(--r-lg); }
     .step-chevron {
       margin-left: auto;
       width: 20px;
@@ -326,6 +332,17 @@
       background-repeat: no-repeat;
       background-position: center;
       background-size: 20px 20px;
+    }
+    /* Sync Accounts: the latest sync on either side failed. */
+    .step-card.sync-error { border-color: #fecaca; }
+    .step-card.sync-error .step-num {
+      background-color: var(--red);
+      color: transparent;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 16px 16px;
+      cursor: help;
     }
     /* Map Accounts is complete but a split account's shares don't total 100%. */
     .step-card.complete.split-warn { border-color: rgba(180,83,9,.35); }
@@ -461,6 +478,10 @@
     .conn-count { flex-wrap: wrap; }
     .conn-refreshed { font-size: 12.5px; font-weight: 500; color: var(--ink-3); }
     .conn-refreshed:empty { display: none; }
+    .conn-card.is-error .conn-count { color: var(--red); }
+    /* After a failed sync: the accounts kept from the last good one, muted so they read as old. */
+    .conn-stale { margin: -4px 0 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+    .conn-stale[hidden] { display: none; }
     .conn-refreshed::before { content: "·"; margin-right: 8px; font-weight: 700; }
     .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex-shrink: 0; }
     .conn-card.is-loaded .conn-count { color: var(--ink); }
@@ -470,7 +491,7 @@
     .conn-status:empty { display: none; }
     .load-progress.conn-progress, .conn-card .load-progress { margin-top: 0; }
     .conn-btn { width: 100%; margin-top: auto; }
-    .conn-needs { margin: -2px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+    .conn-needs { margin: -2px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.4; text-align: center; }
     .conn-arrow { display: flex; align-items: center; color: var(--ink-3); }
     .conn-arrow svg { width: 22px; height: 22px; }
     @media (max-width: 720px) {
@@ -1146,6 +1167,9 @@
       box-shadow: 0 0 0 3px rgba(27,26,20,0.16);
       border-radius: var(--r-sm);
     }
+    /* Headers fill the card's top (or all of it when closed), so their ring follows the card's corners. */
+    .step-head:focus-visible { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+    .step-card.collapsed .step-head:focus-visible { border-radius: var(--r-lg); }
 
     /* ---------- Percentage splits ---------- */
     .chip-tag.is-split { padding-right: 6px; }
@@ -1348,7 +1372,7 @@
       <div class="chip" id="chip-maps"> <span class="dot"></span> <span id="chip-maps-text">Account Mappings — 0 mapped</span> </div>
       <div class="chip ok chip-ready" id="chip-ready" style="display:none">
         <span class="dot"></span>
-        <span>Ready to Sync</span>
+        <span id="chip-ready-text">Ready to Sync</span>
         <button type="button" class="chip-how-btn" id="chip-how-btn" aria-haspopup="dialog" aria-expanded="false">How?</button>
         <div class="chip-how-pop" id="chip-how-pop" role="dialog" aria-label="How to run a sync" hidden>
           <strong>To run a sync:</strong>
@@ -1391,12 +1415,12 @@
     <div class="step-card" id="step2">
       <div class="step-head" tabindex="0" role="button" aria-expanded="true" aria-controls="step2-body">
         <span class="step-num">2</span>
-        <span class="step-title">Load Accounts</span>
+        <span class="step-title">Sync Accounts</span>
         <span class="step-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="step-body" id="step2-body">
       <p class="hint" style="margin-bottom:14px">
-        Load in your accounts from Monarch and ProjectionLab. After loaded, they are cached so you don't need to reload on every visit.
+        Sync your accounts from Monarch and ProjectionLab. They're saved, so you only need to sync again when your accounts change.
       </p>
       <div class="conn-grid">
         <section class="conn-card conn-monarch" id="conn-monarch" aria-label="Monarch (source)">
@@ -1406,12 +1430,13 @@
               <div class="conn-name">Monarch</div>
               <div class="conn-role">Source</div>
             </div>
-            <button type="button" class="refresh-history-btn" id="refresh-history-monarch" data-source="monarch" aria-label="Recent Monarch account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+            <button type="button" class="refresh-history-btn" id="refresh-history-monarch" data-source="monarch" aria-label="Recent Monarch account syncs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
           </div>
-          <div class="conn-count" id="conn-count-monarch"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span><span class="conn-refreshed" id="conn-refreshed-monarch"></span></div>
+          <div class="conn-count" id="conn-count-monarch"><span class="conn-dot"></span><span class="conn-count-text">Not synced yet</span><span class="conn-refreshed" id="conn-refreshed-monarch"></span></div>
+          <p class="conn-stale" id="conn-stale-monarch" hidden></p>
           <div id="load-status-monarch" class="load-status conn-status"></div>
-          <div class="load-progress load-progress-monarch" id="load-progress-monarch" role="progressbar" aria-label="Loading Monarch accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
-          <button type="button" class="btn btn-primary btn-monarch conn-btn" id="load-accounts"><span class="btn-text">Load accounts</span></button>
+          <div class="load-progress load-progress-monarch" id="load-progress-monarch" role="progressbar" aria-label="Syncing Monarch accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
+          <button type="button" class="btn btn-primary btn-monarch conn-btn" id="load-accounts"><span class="btn-text">Sync accounts</span></button>
           <p class="conn-needs">Needs app.monarch.com open in a tab.</p>
         </section>
         <div class="conn-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></div>
@@ -1422,12 +1447,13 @@
               <div class="conn-name">ProjectionLab</div>
               <div class="conn-role">Destination</div>
             </div>
-            <button type="button" class="refresh-history-btn" id="refresh-history-pl" data-source="pl" aria-label="Recent ProjectionLab account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+            <button type="button" class="refresh-history-btn" id="refresh-history-pl" data-source="pl" aria-label="Recent ProjectionLab account syncs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
           </div>
-          <div class="conn-count" id="conn-count-pl"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span><span class="conn-refreshed" id="conn-refreshed-pl"></span></div>
+          <div class="conn-count" id="conn-count-pl"><span class="conn-dot"></span><span class="conn-count-text">Not synced yet</span><span class="conn-refreshed" id="conn-refreshed-pl"></span></div>
+          <p class="conn-stale" id="conn-stale-pl" hidden></p>
           <div id="load-status-pl" class="load-status conn-status"></div>
-          <div class="load-progress load-progress-pl" id="load-progress-pl" role="progressbar" aria-label="Loading ProjectionLab accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
-          <button type="button" class="btn btn-primary btn-pl conn-btn" id="load-pl-accounts"><span class="btn-text">Load accounts</span></button>
+          <div class="load-progress load-progress-pl" id="load-progress-pl" role="progressbar" aria-label="Syncing ProjectionLab accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
+          <button type="button" class="btn btn-primary btn-pl conn-btn" id="load-pl-accounts"><span class="btn-text">Sync accounts</span></button>
           <p class="conn-needs">Needs ProjectionLab open in a tab, on your plan or dashboard.</p>
         </section>
       </div>
@@ -1442,7 +1468,7 @@
       </div>
       <div class="step-body" id="step3-body">
       <div class="map-gate" id="map-gate" style="display:none">
-        Before you can map accounts, save your ProjectionLab API key in Step 1, then load accounts from Monarch and ProjectionLab in Step 2.
+        Before you can map accounts, save your ProjectionLab API key in Step 1, then sync accounts from Monarch and ProjectionLab in Step 2.
       </div>
       <div id="map-content">
       <ul class="hint hint-list">
@@ -1558,7 +1584,7 @@
             </div>
             <div class="advanced-action-group">
               <button type="button" class="btn btn-danger advanced-btn" id="clear-cache">Clear cache</button>
-              <p class="advanced-note" style="margin:4px 0 0 0;font-size:11px">Cached Monarch and ProjectionLab account lists. You’ll need to load accounts again.</p>
+              <p class="advanced-note" style="margin:4px 0 0 0;font-size:11px">Cached Monarch and ProjectionLab account lists. You’ll need to sync accounts again.</p>
               <div class="load-status advanced-action-status" aria-hidden="true"></div>
             </div>
             <div class="advanced-action-group">
