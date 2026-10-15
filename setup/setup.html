@@ -291,13 +291,17 @@
     }
     .step-card.collapsed .step-chevron,
     .step-card.collapsing .step-chevron { transform: rotate(-90deg); } /* collapsing: turns at the start of the close animation */
+    /* Open drawers: a full-width rule under the header row (bleeds through the card's 28px side padding). */
     .step-body {
       overflow: visible;
-      padding-top: 16px;
+      margin: 0 -28px;
+      padding: 20px 28px 0;
+      border-top: 1px solid var(--line);
+      /* Soft shadow just below the rule, so the header reads as sitting slightly above the content. */
+      box-shadow: inset 0 7px 6px -6px rgba(28,25,15,.10);
     }
     .step-card.collapsed .step-body {
       display: none;
-      padding-top: 0;
     }
     .step-num {
       width: 30px;
@@ -454,6 +458,10 @@
     .conn-monarch .conn-role { color: var(--monarch-ink); }
     .conn-pl .conn-role { color: var(--projlab-ink); }
     .conn-count { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+    .conn-count { flex-wrap: wrap; }
+    .conn-refreshed { font-size: 12.5px; font-weight: 500; color: var(--ink-3); }
+    .conn-refreshed:empty { display: none; }
+    .conn-refreshed::before { content: "·"; margin-right: 8px; font-weight: 700; }
     .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex-shrink: 0; }
     .conn-card.is-loaded .conn-count { color: var(--ink); }
     .conn-card.is-loaded .conn-dot { background: var(--good); }
@@ -556,15 +564,17 @@
     /* Emphasize the two main column headers */
     .map-table th:first-child,
     .map-table th.col-pl {
-      font-size: 12px; /* slightly larger than the 11px base */
+      font-size: 13.5px; /* larger than the 11px base */
+      padding-top: 14px;
+      padding-bottom: 14px;
     }
     .map-table th.col-remove { text-align: center; }
     /* Small squircle logos before the two main column headers. */
-    .th-with-logo { display: inline-flex; align-items: center; gap: 8px; }
-    .th-logo { flex: 0 0 auto; display: inline-flex; width: 18px; height: 18px; border-radius: 5px; overflow: hidden; }
+    .th-with-logo { display: inline-flex; align-items: center; gap: 10px; }
+    .th-logo { flex: 0 0 auto; display: inline-flex; width: 24px; height: 24px; border-radius: 6px; overflow: hidden; }
     .th-logo img { width: 100%; height: 100%; display: block; object-fit: contain; }
     .th-logo-monarch { background: var(--monarch-pill-bg); box-shadow: inset 0 0 0 1px rgba(239,108,43,.25); }
-    .th-logo-monarch img { padding: 3px; box-sizing: border-box; }
+    .th-logo-monarch img { padding: 4px; box-sizing: border-box; }
     .th-logo-pl img { object-fit: cover; }
     .map-table th.col-pl { padding-left: 10px; }
     /* 34px of top padding is the gutter for the optional row title; the bottom is 18px (+ the
@@ -968,15 +978,13 @@
     .advanced-card:not(.advanced-locked) .advanced-edit-btn { color: var(--ink); }
     .advanced-body {
       overflow: hidden;
-      padding-top: 16px;
-      margin-top: 12px;
+      margin: 0 -28px;
+      padding: 20px 28px 0;
       border-top: 1px solid var(--advanced-border);
+      box-shadow: inset 0 7px 6px -6px rgba(28,25,15,.10);
     }
     .advanced-card.collapsed .advanced-body {
       display: none;
-      padding-top: 0;
-      margin-top: 0;
-      border-top: none;
     }
     /* When Advanced is locked, disable all interactive controls inside the body
        except the unlock header controls. */
@@ -1243,7 +1251,11 @@
     .sp-notes textarea { width: 100%; max-width: none; margin: 0; min-height: 76px; resize: vertical; font: inherit; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--card); }
     .sp-notes textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,26,20,.12); }
     .sp-meta { font-size: 11px; color: var(--ink-3); margin-top: 6px; }
-    .sp-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+    .sp-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+    /* Destructive: undoes the whole split. Bottom-left, away from Done. */
+    .sp-remove-split { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--red); background: var(--red-bg); border: 1px solid #fecaca; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+    .sp-remove-split:hover { color: #fff; background: var(--red); border-color: var(--red); }
+    .sp-remove-split:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
     .sp-done { font: inherit; font-size: 12.5px; font-weight: 600; color: #fff; background: var(--primary); border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
     .sp-done:hover { background: var(--primary-hover); }
     .sp-done:disabled { opacity: .45; cursor: not-allowed; }
@@ -1396,7 +1408,7 @@
             </div>
             <button type="button" class="refresh-history-btn" id="refresh-history-monarch" data-source="monarch" aria-label="Recent Monarch account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
           </div>
-          <div class="conn-count" id="conn-count-monarch"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span></div>
+          <div class="conn-count" id="conn-count-monarch"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span><span class="conn-refreshed" id="conn-refreshed-monarch"></span></div>
           <div id="load-status-monarch" class="load-status conn-status"></div>
           <div class="load-progress load-progress-monarch" id="load-progress-monarch" role="progressbar" aria-label="Loading Monarch accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
           <button type="button" class="btn btn-primary btn-monarch conn-btn" id="load-accounts"><span class="btn-text">Load accounts</span></button>
@@ -1412,7 +1424,7 @@
             </div>
             <button type="button" class="refresh-history-btn" id="refresh-history-pl" data-source="pl" aria-label="Recent ProjectionLab account loads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
           </div>
-          <div class="conn-count" id="conn-count-pl"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span></div>
+          <div class="conn-count" id="conn-count-pl"><span class="conn-dot"></span><span class="conn-count-text">Not loaded yet</span><span class="conn-refreshed" id="conn-refreshed-pl"></span></div>
           <div id="load-status-pl" class="load-status conn-status"></div>
           <div class="load-progress load-progress-pl" id="load-progress-pl" role="progressbar" aria-label="Loading ProjectionLab accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
           <button type="button" class="btn btn-primary btn-pl conn-btn" id="load-pl-accounts"><span class="btn-text">Load accounts</span></button>

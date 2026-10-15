@@ -156,6 +156,7 @@
     if (!card || !head) return;
     // Programmatic changes are instant; stop any drawer animation in progress.
     if (card._drawerAnim) { card._drawerAnim.cancel(); card._drawerAnim = null; }
+    if (card._ruleAnim) { card._ruleAnim.cancel(); card._ruleAnim = null; }
     card.classList.remove('collapsing');
     if (collapsed) {
       card.classList.add('collapsed');
@@ -181,7 +182,15 @@
     setAria(collapse);
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const from = card.getBoundingClientRect().height;
+    const body = card.querySelector('.step-body, .advanced-body');
+    const ruleStyle = () => {
+      const cs = getComputedStyle(body);
+      return { borderTopColor: cs.borderTopColor, boxShadow: cs.boxShadow };
+    };
+    // Mid-fade (a click reversed the drawer): start the next fade from where this one is.
+    const ruleFrom = body && card._ruleAnim ? ruleStyle() : null;
     if (card._drawerAnim) { card._drawerAnim.cancel(); card._drawerAnim = null; }
+    if (card._ruleAnim) { card._ruleAnim.cancel(); card._ruleAnim = null; }
     card.classList.remove('collapsing');
     if (reduce || typeof card.animate !== 'function') {
       card.classList.toggle('collapsed', collapse);
@@ -195,11 +204,17 @@
       card.classList.add('collapsing');
     }
     card.style.overflow = 'hidden';
-    const anim = card.animate(
-      [{ height: `${from}px` }, { height: `${to}px` }],
-      { duration: collapse ? DRAWER_CLOSE_MS : DRAWER_OPEN_MS, easing: DRAWER_EASING }
-    );
+    const timing = { duration: collapse ? DRAWER_CLOSE_MS : DRAWER_OPEN_MS, easing: DRAWER_EASING };
+    const anim = card.animate([{ height: `${from}px` }, { height: `${to}px` }], timing);
     card._drawerAnim = anim;
+    // The header rule sits inside the closed card's height, so the height animation alone would
+    // show it a beat before the content (opening) and leave it behind after (closing). Fade it
+    // on the same timing instead.
+    if (body) {
+      const shown = ruleStyle();
+      const hidden = { borderTopColor: 'transparent', boxShadow: 'none' };
+      card._ruleAnim = body.animate(collapse ? [ruleFrom || shown, hidden] : [ruleFrom || hidden, shown], timing);
+    }
     anim.onfinish = () => {
       card._drawerAnim = null;
       card.style.overflow = '';
@@ -612,6 +627,8 @@
       await chrome.storage.local.clear();
       refreshHistory.monarch = [];
       refreshHistory.pl = [];
+      showLastRefreshed('monarch', null);
+      showLastRefreshed('pl', null);
       monarchAccounts = [];
       plAccounts = [];
       updateChips();
@@ -649,6 +666,8 @@
       await chrome.storage.local.clear();
       refreshHistory.monarch = [];
       refreshHistory.pl = [];
+      showLastRefreshed('monarch', null);
+      showLastRefreshed('pl', null);
       updateChips();
       updateStepComplete('step1', false);
       updateStepComplete('step2', false);
@@ -891,14 +910,8 @@
     if (step2Complete) setStepCollapsed('step2', true);
     updateStep2Buttons();
     renderMappingRows();
-    const monarchStatus = document.getElementById('load-status-monarch');
-    const plStatus = document.getElementById('load-status-pl');
-    if (monarchStatus && local.lastMonarchRefreshTime) {
-      monarchStatus.textContent = formatLastRefreshed(local.lastMonarchRefreshTime);
-    }
-    if (plStatus && local.lastPLRefreshTime) {
-      plStatus.textContent = formatLastRefreshed(local.lastPLRefreshTime);
-    }
+    showLastRefreshed('monarch', local.lastMonarchRefreshTime);
+    showLastRefreshed('pl', local.lastPLRefreshTime);
     const step3Complete = accountMappings.length > 0 && accountMappings.every((m) => {
       if (!m.plId) return false;
       if (isAssetWithLoanMapping(m)) {
@@ -1175,11 +1188,17 @@
     return 'Last refreshed: ' + new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  /** A successful load: record the time and show it once the status message fades. */
-  function markRefreshed(statusEl, storageKey) {
+  /** "Last refreshed: …" beside the account count on a Step 2 card (blank when never loaded). */
+  function showLastRefreshed(source, ts) {
+    const node = document.getElementById(`conn-refreshed-${source}`);
+    if (node) node.textContent = formatLastRefreshed(ts);
+  }
+
+  /** A successful load: record the time and show it on the card. */
+  function markRefreshed(source, storageKey) {
     const now = Date.now();
     chrome.storage.local.set({ [storageKey]: now });
-    statusEl.textContent = formatLastRefreshed(now);
+    showLastRefreshed(source, now);
   }
 
   function setFinalLoadStatus(statusEl, text, onAfterFade) {
@@ -1205,8 +1224,8 @@
   }
 
   /**
-   * Success or failure of a Step 2 load, as a colored pill. Success fades back to "Last refreshed"
-   * like before; a failure stays on screen until the next attempt so it can't be missed.
+   * Success or failure of a Step 2 load, as a colored pill. Success fades out after a few seconds;
+   * a failure stays on screen until the next attempt so it can't be missed.
    */
   function setLoadOutcome(statusEl, outcome, text, onAfterFade) {
     clearLoadOutcome(statusEl);
@@ -1221,7 +1240,7 @@
       statusEl._fadeTimeout2 = setTimeout(() => {
         statusEl._fadeTimeout2 = null;
         clearLoadOutcome(statusEl);
-        onAfterFade();
+        if (onAfterFade) onAfterFade();
       }, LOAD_STATUS_FADE_MS);
     }, LOAD_STATUS_SHOW_MS);
   }
@@ -1352,7 +1371,8 @@
         await chrome.storage.local.set({ cachedMonarchAccounts: monarchAccounts });
         reconcileMappingsWithAccounts();
         progress.finish('ok');
-        setLoadOutcome(status, 'ok', `Loaded ${monarchAccounts.length} Monarch accounts.`, () => markRefreshed(status, 'lastMonarchRefreshTime'));
+        markRefreshed('monarch', 'lastMonarchRefreshTime');
+        setLoadOutcome(status, 'ok', `Loaded ${monarchAccounts.length} Monarch accounts.`);
         recordRefresh('monarch', { count: monarchAccounts.length });
         updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
         renderMappingRows();
@@ -1387,7 +1407,8 @@
       await chrome.storage.local.set({ cachedPLAccounts: plAccounts });
       reconcileMappingsWithAccounts();
       progress.finish('ok');
-      setLoadOutcome(status, 'ok', `Loaded ${plAccounts.length} ProjectionLab accounts.`, () => markRefreshed(status, 'lastPLRefreshTime'));
+      markRefreshed('pl', 'lastPLRefreshTime');
+      setLoadOutcome(status, 'ok', `Loaded ${plAccounts.length} ProjectionLab accounts.`);
       recordRefresh('pl', { count: plAccounts.length });
       updateStepComplete('step2', monarchAccounts.length > 0 && plAccounts.length > 0);
       renderMappingRows();
@@ -3280,6 +3301,10 @@
     splitPanelEl.appendChild(notes);
 
     const foot = el('div', 'sp-foot');
+    const removeSplit = el('button', 'sp-remove-split', 'Remove Split');
+    removeSplit.type = 'button';
+    removeSplit.onclick = () => removeSplitFor(sourceId, entry.name);
+    foot.appendChild(removeSplit);
     const done = el('button', 'sp-done', 'Done');
     done.type = 'button';
     done.onclick = closeSplitPanel;
@@ -3289,6 +3314,30 @@
     splitPanelEl.hidden = false;
     positionSplitPanel();
     syncCalcAfterRender();
+  }
+
+  /**
+   * Undo a split: the row the panel was opened from keeps the Monarch account as a whole (100%)
+   * chip, and every other row's share of it is removed. The split's note goes with it.
+   */
+  async function removeSplitFor(sourceId, name) {
+    const anchor = splitPanel && splitPanel.anchor;
+    if (!anchor) return;
+    const msg = `Remove the split for ${name}? It will stay on ${anchor.plName || 'this row'} as a whole account, and its shares on other rows will be removed.`;
+    if (!confirm(msg)) return;
+    const isThisSplit = (c) => Model.isSplitChip(c) && Model.sourceIdOf(c) === String(sourceId);
+    for (const m of accountMappings) {
+      if (m === anchor) {
+        const at = m.monarchAccounts.findIndex(isThisSplit);
+        m.monarchAccounts = m.monarchAccounts.filter((c, i) => i === at || !isThisSplit(c));
+        if (at !== -1) m.monarchAccounts[at] = { id: String(sourceId), name };
+      } else {
+        m.monarchAccounts = m.monarchAccounts.filter((c) => !isThisSplit(c));
+      }
+    }
+    closeSplitPanel();
+    refreshMappingRows();
+    await persistMappings();
   }
 
   // ---------- share calculator ($ amount → %) ----------
