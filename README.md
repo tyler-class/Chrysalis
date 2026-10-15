@@ -20,6 +20,8 @@ Chrysalis is a Chrome extension that pulls your live account balances from Monar
 
 Chrysalis is, and will always be, **free** to use. But if you want to say thank you, [coffee is my love language](https://ko-fi.com/tylerclass).
 
+Got feedback, an idea, or a bug to report? Email me at [chrysalis@tylerclass.net](mailto:chrysalis@tylerclass.net?subject=Chrysalis%20Feedback).
+
 ---
 
 ## 📣 Release Announcement — v1.2.0-1

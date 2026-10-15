@@ -2878,8 +2878,15 @@
   }
 
   attachTip(document.getElementById('chip-maps'));
-  attachTip(document.querySelector('.header-links .help-icon-link'), ICON_TIP_DELAY_MS);
+  document.querySelectorAll('.header-links .help-icon-link').forEach((link) => attachTip(link, ICON_TIP_DELAY_MS));
   attachTip(document.querySelector('#step3 .step-num'));
+  // Point this tab at the mailto URL: Chrome hands it to the mail app and the setup page stays put.
+  document.querySelectorAll('a[href^="mailto:"]').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.tabs.update({ url: link.href });
+    });
+  });
   window.addEventListener('scroll', hideTip, true);
 
   /** Under/over/missing-percentage messages for the split accounts in one row. */

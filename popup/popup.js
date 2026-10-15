@@ -407,6 +407,14 @@
 
   async function init() {
     document.getElementById('open-setup').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
+    // A plain mailto link does nothing inside an extension popup. Pointing the active tab at it makes Chrome
+    // hand it to the mail app and leave the page as it was (a new tab would just sit on about:blank).
+    document.querySelectorAll('a[href^="mailto:"]').forEach((link) => {
+      link.onclick = (e) => {
+        e.preventDefault();
+        chrome.tabs.update({ url: link.href }).then(() => window.close());
+      };
+    });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const tabUrl = tab?.url || '';
