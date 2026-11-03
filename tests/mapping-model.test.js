@@ -246,3 +246,181 @@ test('row titles: optional, trimmed, capped, saved only when set, and kept in ba
   assert.equal(back2.mappings[0].title.length, M.TITLE_MAX);
   assert.match(back2.warnings.join(' '), /longer than 250 characters/);
 });
+
+// ---------- ProjectionLab plugin API contract (V4 / V5) ----------
+
+test('plContractOf: a missing version is V4 (contract 1); V5 reports 2', () => {
+  assert.equal(M.plContractOf(undefined), 1);
+  assert.equal(M.plContractOf(null), 1);
+  assert.equal(M.plContractOf(2), 2);
+  assert.equal(M.isSupportedPlContract(1), true);
+  assert.equal(M.isSupportedPlContract(2), true);
+  assert.equal(M.isSupportedPlContract(3), false);
+  assert.match(M.unsupportedPlContractMessage(3), /version 3/);
+});
+
+test('normalizeV5Account: kinds map to the V4 categories; nativeType is always empty', () => {
+  const debt = M.normalizeV5Account({ id: 7, name: 'Mortgage', kind: 'debt', type: 'mortgage', balance: 1, securedByAssetId: 9 });
+  assert.deepEqual(debt, {
+    id: '7', name: 'Mortgage', type: 'debt', nativeType: '', kind: 'debt',
+    v5Type: 'mortgage', subtype: '', securedByAssetId: '9',
+  });
+  const house = M.normalizeV5Account({ id: '9', name: 'House', kind: 'real-asset', type: 'real-estate', value: 1 });
+  assert.equal(house.type, 'asset');
+  // On V5 a loan is its own account, so nothing is two-lane.
+  assert.equal(house.nativeType, '');
+  assert.equal(M.isAssetWithLoanMapping({ plNativeType: house.nativeType }), false);
+  // An account whose type happens to contain an asset keyword is never treated as asset-with-loan.
+  const other = M.normalizeV5Account({ id: 'o', name: 'Other', kind: 'account', type: 'other' });
+  assert.equal(other.nativeType, '');
+  assert.equal(M.isAssetWithLoanMapping({ plNativeType: other.nativeType }), false);
+  assert.equal(M.normalizeV5Account({ id: 'x', kind: 'mystery' }), null);
+  assert.equal(M.normalizeV5Account({ kind: 'debt' }), null);
+});
+
+test('v5CategoryOf: only type "savings" is Savings; every other account type is Investments', () => {
+  assert.equal(M.v5CategoryOf({ kind: 'account', type: 'savings' }), 'savings');
+  for (const t of ['taxable', '401k', 'roth-ira', 'hsa', '529', 'crypto', 'sep', 'tfsa']) {
+    assert.equal(M.v5CategoryOf({ kind: 'account', type: t }), 'investment');
+  }
+  assert.equal(M.v5CategoryOf({ kind: 'debt', type: 'mortgage' }), 'debt');
+  assert.equal(M.v5CategoryOf({ kind: 'real-asset', type: 'car' }), 'asset');
+  for (const t of ['savings', 'investment']) assert.equal(M.isSplitTargetPlType(t), true);
+});
+
+test('planV5Writes: the field comes from the account kind, not the saved mapping', () => {
+  const accounts = [
+    { id: 's', name: 'Savings', kind: 'account' },
+    { id: 'd', name: 'Card', kind: 'debt' },
+    { id: 'h', name: 'House', kind: 'real-asset' },
+  ];
+  const plan = M.planV5Writes([
+    { plId: 's', balance: -12.5 },
+    { plId: 'd', balance: -300 },
+    { plId: 'h', balance: 450000 },
+  ], accounts);
+  assert.deepEqual(plan, [
+    { plId: 's', values: { balance: -12.5 } },
+    { plId: 'd', values: { balance: 300 } }, // debts are positive for money owed
+    { plId: 'h', values: { value: 450000 } }, // real assets use value, never balance
+  ]);
+});
+
+test('planV5Writes: missing (archived/deleted) accounts and bad numbers are errors, never writes', () => {
+  const plan = M.planV5Writes([
+    { plId: 'gone', balance: 1 },
+    { plId: 's', balance: NaN },
+  ], [{ id: 's', name: 'S', kind: 'account' }]);
+  assert.equal(plan[0].error, M.V5_MISSING_ACCOUNT_ERROR);
+  assert.equal(plan[0].values, undefined);
+  assert.match(plan[1].error, /valid number/);
+});
+
+test('planV5Writes: asset-with-loan rows write the asset value and report the loan as not synced', () => {
+  const accounts = [{ id: 'h', name: 'House', kind: 'real-asset' }, { id: 's', name: 'S', kind: 'account' }];
+  const both = M.planV5Writes([{ plId: 'h', isAssetWithLoan: true, valueSum: 500000, loanSum: -200000, hasValue: true, hasLoan: true }], accounts)[0];
+  assert.deepEqual(both.values, { value: 500000 });
+  assert.equal(both.warning, M.V5_LOAN_NOT_SYNCED_WARNING);
+  const loanOnly = M.planV5Writes([{ plId: 'h', isAssetWithLoan: true, valueSum: 0, loanSum: 1, hasValue: false, hasLoan: true }], accounts)[0];
+  assert.equal(loanOnly.values, undefined);
+  assert.equal(loanOnly.error, M.V5_LOAN_NOT_SYNCED_WARNING);
+  const wrongKind = M.planV5Writes([{ plId: 's', isAssetWithLoan: true, valueSum: 1, loanSum: 2, hasValue: true, hasLoan: true }], accounts)[0];
+  assert.match(wrongKind.error, /isn't a real asset/);
+});
+
+test('planV5Writes: a two-lane row on a non-asset with an empty Loan lane writes a normal balance', () => {
+  // V4 treats "credit-card" as asset-with-loan because the type contains "car".
+  assert.equal(M.isAssetWithLoanMapping({ plNativeType: 'credit-card' }), true);
+  const plan = M.planV5Writes(
+    [{ plId: 'cc', isAssetWithLoan: true, valueSum: -340, loanSum: 0, hasValue: true, hasLoan: false }],
+    [{ id: 'cc', name: 'Card', kind: 'debt' }]
+  );
+  assert.deepEqual(plan, [{ plId: 'cc', values: { balance: 340 } }]);
+});
+
+test('migrateToV5Mappings: two-lane rows become an asset row plus a loan row', () => {
+  const chip = (id, name) => ({ id, name });
+  const mappings = [
+    { plId: 'house', plName: 'House', plType: 'asset', plNativeType: 'real-estate', monarchAccounts: [chip('z', 'Zillow')], monarchAccountsLoan: [chip('mort', 'Chase mortgage')] },
+    { plId: 'car', plName: 'Car', plType: 'asset', plNativeType: 'car', monarchAccounts: [chip('kbb', 'KBB')], monarchAccountsLoan: [chip('al', 'Auto loan')] },
+    { plId: 'boat', plName: 'Boat', plType: 'asset', plNativeType: 'boat', monarchAccounts: [chip('b', 'Boat value')], monarchAccountsLoan: [] },
+    { plId: 'cc', plName: 'Card', plType: 'debt', plNativeType: 'credit-card', monarchAccounts: [chip('amex', 'Amex')], monarchAccountsLoan: [] },
+    { plId: 'sav', plName: 'Savings', plType: 'savings', plNativeType: 'savings', monarchAccounts: [chip('chk', 'Checking')], monarchAccountsLoan: [] },
+  ];
+  const accounts = [
+    { id: 'house', name: 'House', kind: 'real-asset', type: 'asset' },
+    { id: 'car', name: 'Car', kind: 'real-asset', type: 'asset' },
+    { id: 'boat', name: 'Boat', kind: 'real-asset', type: 'asset' },
+    { id: 'cc', name: 'Card', kind: 'debt', type: 'debt' },
+    { id: 'sav', name: 'Savings', kind: 'account', type: 'savings' },
+    { id: 'm1', name: 'Mortgage', kind: 'debt', type: 'debt', securedByAssetId: 'house' },
+    { id: 'l1', name: 'Car loan A', kind: 'debt', type: 'debt', securedByAssetId: 'car' },
+    { id: 'l2', name: 'Car loan B', kind: 'debt', type: 'debt', securedByAssetId: 'car' },
+  ];
+  const before = JSON.stringify(mappings);
+  const { mappings: out, summary } = M.migrateToV5Mappings(mappings, accounts);
+  assert.equal(JSON.stringify(mappings), before, 'input is not edited');
+  assert.deepEqual(summary, { rows: 4, loansLinked: 1, loansToPick: 1 });
+  assert.deepEqual(out.map((m) => [m.plId, m.monarchAccounts.map((c) => c.id).join('+'), m.monarchAccountsLoan.length]), [
+    ['house', 'z', 0],
+    ['m1', 'mort', 0], // exactly one debt secures the house: pre-filled
+    ['car', 'kbb', 0],
+    ['', 'al', 0], // two debts secure the car: the person picks
+    ['boat', 'b', 0], // no loan lane chips: no loan row
+    ['cc', 'amex', 0], // two-lane only by type-text match: just loses the lane
+    ['sav', 'chk', 0],
+  ]);
+  assert.match(out[3].title, /^Loan for Car: pick its ProjectionLab loan account$/);
+  assert.equal(out.every((m) => !M.isAssetWithLoanMapping(m)), true);
+});
+
+test('migrateToV5Mappings: a debt that already has a row is not pre-filled again', () => {
+  const mappings = [
+    { plId: 'house', plName: 'House', plType: 'asset', plNativeType: 'real-estate', monarchAccounts: [], monarchAccountsLoan: [{ id: 'mort', name: 'Mortgage' }] },
+    { plId: 'm1', plName: 'Mortgage', plType: 'debt', plNativeType: '', monarchAccounts: [{ id: 'x', name: 'X' }], monarchAccountsLoan: [] },
+  ];
+  const accounts = [{ id: 'house', name: 'House', kind: 'real-asset' }, { id: 'm1', name: 'Mortgage', kind: 'debt', securedByAssetId: 'house' }];
+  const { mappings: out, summary } = M.migrateToV5Mappings(mappings, accounts);
+  assert.equal(summary.loansToPick, 1);
+  assert.equal(out[1].plId, '');
+});
+
+test('planV5LoanMigration: nothing to do on the older format or without two-lane rows', () => {
+  const twoLane = [{ plId: 'house', plName: 'House', plType: 'asset', plNativeType: 'real-estate', monarchAccounts: [{ id: 'z', name: 'Zillow' }], monarchAccountsLoan: [{ id: 'mort', name: 'Mortgage' }] }];
+  const oneLane = [{ plId: 'sav', plName: 'Savings', plType: 'savings', plNativeType: 'savings', monarchAccounts: [{ id: 'chk', name: 'Checking' }], monarchAccountsLoan: [] }];
+  const v5 = [{ id: 'house', name: 'House', kind: 'real-asset' }, { id: 'sav', name: 'Savings', kind: 'account', type: 'savings' }];
+  const v4 = [{ id: 'house', name: 'House', type: 'asset' }];
+  assert.equal(M.planV5LoanMigration(twoLane, v4, {}), null, 'older format: rows stay two-lane');
+  assert.equal(M.planV5LoanMigration(oneLane, v5, {}), null, 'no two-lane rows');
+  assert.equal(M.planV5LoanMigration(twoLane, [], {}), null, 'no accounts');
+});
+
+test('planV5LoanMigration: moved rows sync the loan to its own debt, with a backup of the old rows', () => {
+  const mappings = M.normalizeMappings([
+    { plId: 'house', plName: 'House', plType: 'asset', plNativeType: 'real-estate', monarchAccounts: [{ id: 'z', name: 'Zillow' }], monarchAccountsLoan: [{ id: 'mort', name: 'Mortgage' }] },
+    { plId: 'sav', plName: 'Savings', plType: 'savings', plNativeType: 'savings', monarchAccounts: [{ id: 'chk', name: 'Checking' }], monarchAccountsLoan: [] },
+  ]);
+  const accounts = [
+    { id: 'house', name: 'House', kind: 'real-asset', type: 'asset' },
+    { id: 'sav', name: 'Savings', kind: 'account', type: 'savings' },
+    { id: 'm1', name: 'Mortgage', kind: 'debt', type: 'debt', securedByAssetId: 'house' },
+  ];
+  const plan = M.planV5LoanMigration(mappings, accounts, {}, { extensionVersion: '1.3.0' });
+  assert.deepEqual(plan.summary, { rows: 1, loansLinked: 1, loansToPick: 0 });
+
+  // The backup restores the two-lane rows exactly.
+  const restored = M.parseImport(plan.backup).mappings;
+  assert.equal(restored.length, 2);
+  assert.equal(M.isAssetWithLoanMapping(restored[0]), true);
+  assert.deepEqual(restored[0].monarchAccountsLoan.map((c) => c.id), ['mort']);
+
+  // Planning a sync from the moved rows: the asset gets `value`, the loan a positive `balance` on the debt.
+  const balances = { z: 500000, mort: -320000, chk: 1200 };
+  const { rows } = M.planSync(plan.mappings, balances);
+  const updates = rows.map((r) => ({ plId: r.mapping.plId, balance: r.amountCents / 100 }));
+  assert.deepEqual(M.planV5Writes(updates, accounts), [
+    { plId: 'house', values: { value: 500000 } },
+    { plId: 'm1', values: { balance: 320000 } },
+    { plId: 'sav', values: { balance: 1200 } },
+  ]);
+});

@@ -199,6 +199,29 @@
     .btn-secondary:hover { background: var(--canvas-2); border-color: var(--line-strong); color: var(--ink); }
     .sync-wrap { position: relative; }
     .sync-wrap-top { margin-bottom: 14px; }
+    /* Non-blocking notice: loans need moving to their own rows in Setup. */
+    .account-update-notice { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r-md); background: var(--projlab-bg); border: 1px solid rgba(47,107,255,.25); color: var(--projlab-ink); font-size: 12.5px; line-height: 1.5; }
+    .account-update-notice button { margin-top: 8px; font: inherit; font-size: 12px; font-weight: 600; color: var(--projlab-ink); background: var(--card); border: 1px solid rgba(47,107,255,.35); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+    /* Two readiness rows above Sync Now: dot + site name, then one short action until ready. */
+    .ready-list {
+      margin-bottom: 12px; border-radius: var(--r-md);
+      background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+    }
+    .ready-row { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 14px; font-size: 13px; font-weight: 600; color: var(--ink); }
+    .ready-row + .ready-row { border-top: 1px solid var(--line); }
+    .ready-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--line-strong); transition: background .2s; }
+    .ready-row.ok .ready-dot { background: var(--good); }
+    .ready-name { flex: 1; min-width: 0; }
+    .ready-connected { font-size: 12px; font-weight: 600; color: var(--good); }
+    .ready-intro { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+    .ready-wait { color: var(--ink-3); }
+    .ready-open {
+      flex-shrink: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2);
+      background: none; border: 1px solid var(--line-strong); border-radius: 7px;
+      padding: 3px 10px; cursor: pointer;
+    }
+    .ready-open:hover { color: var(--ink); background: var(--canvas-2); }
+    .cta-card .sync-wrap { margin-top: 4px; }
     .btn-sync-now { font-size: 14px; font-weight: 600; padding: 12px 20px; }
     .sync-history-block { margin-top: 16px; }
     .sync-history-header {
@@ -506,6 +529,7 @@
   </div>
   <div class="main" id="main">
     <div id="announcement-slot"></div>
+    <div id="notice-slot"></div>
     <div class="status-bar gray" id="status-bar">
       <span class="dot gray"></span>
       <span id="status-text">Loading…</span>

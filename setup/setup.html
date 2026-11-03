@@ -1075,7 +1075,6 @@
       box-sizing: border-box;
     }
     .advanced-input::placeholder { color: var(--muted); }
-    .auto-sync-row { display: flex; flex-wrap: wrap; }
     .advanced-number { width: 100px; }
     .advanced-select, .advanced-time, .advanced-number {
       padding: 6px 10px;
@@ -1215,6 +1214,13 @@
     .split-msg.over { color: var(--red); }
     .split-fix { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
     /* Second line under a dropdown option's name, inside its hover fill. */
+    /* One-time notice after loans move to their own rows (new ProjectionLab account format). */
+    .loan-notice { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--projlab-bg); border: 1px solid rgba(47,107,255,.25); color: var(--projlab-pill-ink); font-size: 13px; line-height: 1.5; }
+    .loan-notice[hidden] { display: none; }
+    .loan-notice-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .loan-notice-btn { font: inherit; font-size: 12px; font-weight: 600; color: var(--projlab-ink); background: var(--card); border: 1px solid rgba(47,107,255,.35); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+    .loan-notice-btn:hover { background: #fff; border-color: var(--projlab); }
+    .opt-sub.opt-secured { color: var(--ink-3); font-weight: 500; }
     .opt-split-meta, .opt-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--warn); }
     .opt-sub { font-weight: 500; color: var(--ink-3); }
     .pl-preview { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -1437,7 +1443,7 @@
           <div id="load-status-monarch" class="load-status conn-status"></div>
           <div class="load-progress load-progress-monarch" id="load-progress-monarch" role="progressbar" aria-label="Syncing Monarch accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
           <button type="button" class="btn btn-primary btn-monarch conn-btn" id="load-accounts"><span class="btn-text">Sync accounts</span></button>
-          <p class="conn-needs">Needs app.monarch.com open in a tab.</p>
+          <p class="conn-needs">Opens Monarch for you if it isn't open. You need to be signed in.</p>
         </section>
         <div class="conn-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></div>
         <section class="conn-card conn-pl" id="conn-pl" aria-label="ProjectionLab (destination)">
@@ -1454,7 +1460,7 @@
           <div id="load-status-pl" class="load-status conn-status"></div>
           <div class="load-progress load-progress-pl" id="load-progress-pl" role="progressbar" aria-label="Syncing ProjectionLab accounts" aria-valuemin="0" aria-valuemax="100" hidden><div class="load-progress-fill"></div></div>
           <button type="button" class="btn btn-primary btn-pl conn-btn" id="load-pl-accounts"><span class="btn-text">Sync accounts</span></button>
-          <p class="conn-needs">Needs ProjectionLab open in a tab, on your plan or dashboard.</p>
+          <p class="conn-needs">Opens ProjectionLab for you if it isn't open. You need to be signed in.</p>
         </section>
       </div>
       </div>
@@ -1471,9 +1477,10 @@
         Before you can map accounts, save your ProjectionLab API key in Step 1, then sync accounts from Monarch and ProjectionLab in Step 2.
       </div>
       <div id="map-content">
+      <div class="loan-notice" id="loan-notice" role="status" hidden></div>
       <ul class="hint hint-list">
         <li>For each ProjectionLab account, select one or more Monarch accounts. Balances from multiple Monarch accounts will be summed into one ProjectionLab account.</li>
-        <li>For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.</li>
+        <li id="hint-two-lane">For ProjectionLab accounts that represent an asset with both a value and an associated loan, you can map separate Monarch accounts to the asset and to the loan, or choose to map only the asset side or only the loan side if you prefer.</li>
         <li>To send part of a cash or investment account to different ProjectionLab accounts (for example, the Roth and pre-tax parts of a 401(k)), click the split icon on its chip. Each account's shares must add up to 100%.</li>
       </ul>
       <table class="map-table">
@@ -1526,45 +1533,6 @@
             Show sync debug details
           </label>
           <p class="advanced-note">After a sync, additional debug details will appear in both the popup from the extension and the bottom of a sync history record. Keep off for a simpler view.</p>
-        </div>
-
-        <div class="advanced-block">
-          <label class="advanced-label">
-            <input type="checkbox" id="auto-sync-enabled" />
-            Run sync automatically
-          </label>
-          <p class="advanced-note" style="margin-bottom:10px">Sync runs in the background at the time you choose. Requires a Monarch tab to be open (any window); if none is open, that run is skipped.</p>
-          <div class="auto-sync-options" id="auto-sync-options">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-              <label for="auto-sync-frequency" class="advanced-label" style="margin:0">Frequency</label>
-              <select id="auto-sync-frequency" class="advanced-select">
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-              </select>
-            </div>
-            <div id="auto-sync-day-week-wrap" style="display:none;margin-bottom:8px;align-items:center;gap:8px" class="auto-sync-row">
-              <label for="auto-sync-day-week" class="advanced-label" style="margin:0">Day of week</label>
-              <select id="auto-sync-day-week" class="advanced-select">
-                <option value="0">Sunday</option>
-                <option value="1">Monday</option>
-                <option value="2">Tuesday</option>
-                <option value="3">Wednesday</option>
-                <option value="4">Thursday</option>
-                <option value="5">Friday</option>
-                <option value="6">Saturday</option>
-              </select>
-            </div>
-            <div id="auto-sync-day-month-wrap" style="display:none;margin-bottom:8px;align-items:center;gap:8px" class="auto-sync-row">
-              <label for="auto-sync-day-month" class="advanced-label" style="margin:0">Day of month</label>
-              <select id="auto-sync-day-month" class="advanced-select"></select>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <label for="auto-sync-time" class="advanced-label" style="margin:0">Time</label>
-              <input type="time" id="auto-sync-time" class="advanced-time" value="09:00" />
-            </div>
-          </div>
         </div>
 
         <div class="advanced-section-label">Data &amp; maintenance</div>

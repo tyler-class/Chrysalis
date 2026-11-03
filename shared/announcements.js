@@ -16,6 +16,9 @@
  *     linkUrl:  optional CTA link target
  *     expires:  ISO date; the banner disappears ON this date (so it shows
  *               through the day before). Leave out for no expiry.
+ *     when:     optional async () => boolean; the banner only shows when it
+ *               resolves true (e.g. only for people with a setting turned on).
+ *               When it's false, the next announcement in the list is tried.
  *   }
  *
  * Dismissal model (recommended approach): we store the SET of dismissed
@@ -32,6 +35,22 @@
 
   // ─── Edit this list to publish announcements ──────────────────────────────
   const ANNOUNCEMENTS = [
+    {
+      id: 'v1.3.0-ea',
+      title: 'New in v1.3.0 — ProjectionLab Early Access support',
+      body:
+        '<strong>Chrysalis now works with the new ProjectionLab Early Access.</strong> ' +
+        'The main change is how assets are mapped: ProjectionLab now keeps a loan as its own ' +
+        'account, so an asset and its loan each get their own row. Chrysalis moved your ' +
+        'existing asset + loan rows for you. Check them in Setup → Map Accounts.',
+      linkText: 'What changed ↗',
+      linkUrl: 'https://github.com/tyler-class/Chrysalis#assets-and-loans-on-projectionlab-early-access',
+      expires: '2027-03-31', // disappears on 2027-03-31 (shows through 2027-03-30)
+      when: async () => {
+        const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+        return !!plUseEarlyAccess;
+      },
+    },
     {
       id: 'v1.2.0',
       title: 'New in v1.2.0 — split cash and investment accounts',
@@ -83,13 +102,22 @@
     }
   }
 
+  async function passesCondition(a) {
+    if (typeof a.when !== 'function') return true;
+    try {
+      return !!(await a.when());
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function getActive() {
     const now = Date.now();
     const dismissed = await getDismissed();
-    return (
-      ANNOUNCEMENTS.find((a) => isActive(a, now) && !dismissed.includes(a.id)) ||
-      null
-    );
+    for (const a of ANNOUNCEMENTS) {
+      if (isActive(a, now) && !dismissed.includes(a.id) && (await passesCondition(a))) return a;
+    }
+    return null;
   }
 
   async function dismiss(id) {

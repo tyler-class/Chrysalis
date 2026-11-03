@@ -103,6 +103,8 @@
     return { error: "Monarch didn't accept the sign-in. Refresh the Monarch tab and try again." };
   }
 
+  const CHECK_AUTH_QUERY = 'query CheckAuth { accounts { id } }';
+
   const GET_ACCOUNTS_QUERY = `
   query GetAccounts {
     accounts {
@@ -189,6 +191,12 @@
     const handle = async () => {
       if (message.type === 'DIAGNOSE_STORAGE') {
         return { success: true, report: diagnoseStorage() };
+      }
+
+      if (message.type === 'CHECK_AUTH') {
+        // The smallest signed-in request: Monarch only answers it for a signed-in session.
+        const result = await graphqlRequestWithAuth(CHECK_AUTH_QUERY);
+        return result.error ? { success: false, error: result.error } : { success: true };
       }
 
       if (message.type === 'FETCH_ACCOUNTS') {

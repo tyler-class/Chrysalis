@@ -24,7 +24,48 @@ Chrysalis is, and will always be, **free** to use. But if you want to say thank 
 
 ---
 
-## 📣 Release Announcement — v1.2.0-2
+## 📣 Release Announcement — v1.3.0
+
+**ProjectionLab Early Access is now supported.** If your ProjectionLab account is on Early
+Access (`ea.projectionlab.com`), turn on **Opt in to ProjectionLab Early Access** in Setup →
+Step 1 and Chrysalis syncs to it. Nothing changes if you use the standard
+`app.projectionlab.com`.
+
+**The main change is how assets are mapped.** On Early Access, ProjectionLab keeps a loan
+as its own account instead of a second value on its asset. So a house and its mortgage, or a
+car and its auto loan, are now two rows in Map Accounts: one for the asset's value and one
+for the loan. See [Assets and loans on ProjectionLab Early Access](#assets-and-loans-on-projectionlab-early-access).
+
+- **Your existing rows are moved for you.** The first time you click **Sync Now** or sync
+  ProjectionLab accounts in Setup on Early Access, each asset + loan row becomes an asset row
+  followed by its own loan row, before anything is synced.
+- **Loans are matched automatically.** When exactly one ProjectionLab loan is secured by that
+  asset, it's filled in. Otherwise the new row is titled "Loan for …" and asks you to pick it.
+- **Your previous mappings are kept.** A notice in Map Accounts explains what moved and has a
+  **Download previous mappings** button.
+- **Loans show what they're secured by** ("Secured by …") in the ProjectionLab account list,
+  and debts are grouped under **Debts**.
+- **Only current values change.** Chrysalis updates balances and asset values; purchase price
+  and cost basis in ProjectionLab are left alone.
+
+**Also in v1.3.0: one reliable way to sync**
+
+- **The popup shows exactly what's needed to sync.** Two checks, one for Monarch and one for
+  ProjectionLab, each with a dot that turns from gray to green once that site is open in a tab
+  and signed in (for ProjectionLab, that your API key is accepted too). A button next to each
+  opens the site or jumps to its tab. **Sync Now** turns on when both are green, and the popup
+  works from any tab.
+- **Sync accounts in Setup opens Monarch for you** if it isn't open, the same way it already did
+  for ProjectionLab.
+- **Syncing always goes through your open ProjectionLab tab.** The old fallback that tried to
+  update ProjectionLab with no tab open didn't work reliably, so it's gone.
+- **Scheduled auto-sync is removed.** It depended on that fallback. Sync with **Sync Now**
+  instead.
+
+<details>
+<summary><strong>Previous release — v1.2.0-2</strong></summary>
+
+<br>
 
 **Split cash and investment accounts across ProjectionLab accounts.** One Monarch cash or
 investment account can now feed several ProjectionLab accounts by percentage. For example, you
@@ -105,6 +146,8 @@ See [Splitting an account](#splitting-an-account).
   the mapping table's column headers and logos are larger, and each open section has a
   divider under its header that fades in and out with the drawer.
 - The extension's full name is now **Chrysalis: Monarch to ProjectionLab Sync**.
+
+</details>
 
 <details>
 <summary><strong>Previous release — v1.1.0</strong></summary>
@@ -188,16 +231,16 @@ Chrysalis uses ProjectionLab's official Plugin API to update your account balanc
 
 Paste it into the **ProjectionLab API Key** field in Chrysalis and click **Save Key**.
 
-**ProjectionLab Early Access (optional):** Most people should skip this — by default Chrysalis uses the standard `app.projectionlab.com`. If your ProjectionLab account is enrolled in the Early Access program (`ea.projectionlab.com`), flip on the **Opt in to ProjectionLab Early Access** toggle (below the Save/Clear buttons) so account loading and balance syncs use the Early Access endpoint instead.
+**ProjectionLab Early Access (optional):** Most people should skip this — by default Chrysalis uses the standard `app.projectionlab.com`. If your ProjectionLab account is enrolled in the Early Access program (`ea.projectionlab.com`), flip on the **Opt in to ProjectionLab Early Access** toggle (below the Save/Clear buttons) so account loading and balance syncs use the Early Access endpoint instead. If ProjectionLab sends you to `ea.projectionlab.com` when you sign in, your account is on Early Access and you need this on.
 
 ### Step 2 — Sync your accounts
 
 Before you can map anything, Chrysalis needs to fetch your account lists from both services.
 
-1. Make sure you're logged into Monarch Money. Have `app.monarch.com` open in a tab
-2. On the **Monarch** card, click **Sync accounts**. A green ✓ shows when it's done
-3. Make sure you're logged into ProjectionLab in an open tab — `app.projectionlab.com`, or `ea.projectionlab.com` if you enabled Early Access in Step 1
-4. On the **ProjectionLab** card, click **Sync accounts**. A green ✓ shows when it's done
+1. Make sure you're signed in to Monarch Money (`app.monarch.com`)
+2. On the **Monarch** card, click **Sync accounts**. If Monarch isn't open, Chrysalis opens it in a new tab. A green ✓ shows when it's done
+3. Make sure you're signed in to ProjectionLab (`app.projectionlab.com`, or `ea.projectionlab.com` if you enabled Early Access in Step 1)
+4. On the **ProjectionLab** card, click **Sync accounts**. If ProjectionLab isn't open, Chrysalis opens it in a new tab. A green ✓ shows when it's done
 5. Anytime you add/remove/rename accounts in either tool, come back to Setup and click **Sync accounts** on that card again. Your mappings are keyed by ID and will be preserved even if you change the name of an account.
 
 ### Step 3 — Map your accounts
@@ -229,11 +272,20 @@ When your setup is complete, you'll see green visual feedback indicating each se
 
 <kbd><img src="screenshots/setup-configured.png" width="600"></kbd>
 
-**Special mapping for assets**: Monarch and ProjectionLab work differently in terms of how the data is structured for various types of assets (real estate, cars, motorcycles, jewelry, precious metals, etc.). Monarch stores an asset's value and a loan against that asset as *2 separate accounts*, while ProjectionLab has both the value of an asset and a loan against an asset in *1 account*. Don't fret, the mapping of this kind of asset is **fully supported**.
+**Special mapping for assets**: Monarch and ProjectionLab work differently in terms of how the data is structured for various types of assets (real estate, cars, motorcycles, jewelry, precious metals, etc.). Monarch stores an asset's value and a loan against that asset as *2 separate accounts*, while ProjectionLab has both the value of an asset and a loan against an asset in *1 account*. Don't fret, the mapping of this kind of asset is **fully supported**. (This section is for the standard `app.projectionlab.com`. On Early Access, see [Assets and loans on ProjectionLab Early Access](#assets-and-loans-on-projectionlab-early-access).)
 
 When you select a ProjectionLab account that is one of these asset types, the row switches to a 2-lane layout that supports both the Asset and the Loan amount for that ProjectionLab account. On the Monarch side, you choose the Asset and Loan accounts individually. When synced to ProjectionLab, the Asset and Loan amounts from the 2 separate Monarch accounts are automatically merged into the 1 ProjectionLab account in the correct target fields.
 
 <kbd><img src="screenshots/mapping-asset-and-loan.png" width="600"></kbd>
+
+### Assets and loans on ProjectionLab Early Access
+
+On ProjectionLab Early Access, a loan is its own ProjectionLab account, separate from the asset it's secured by. So there's no 2-lane row: map the asset's value and its loan as two normal rows.
+
+- **Asset row:** the Monarch asset account (e.g. your home's value) → the ProjectionLab real asset.
+- **Loan row:** the Monarch loan account (e.g. your mortgage) → the ProjectionLab loan. In the ProjectionLab list, loans are under **Debts** and show "Secured by …" with the asset they belong to.
+
+If you had 2-lane rows before turning on Early Access, Chrysalis splits each one into these two rows the first time you click **Sync Now** or sync ProjectionLab accounts in Setup, and fills in the loan when it can find exactly one ProjectionLab loan secured by that asset. Any loan it can't match gets a row titled "Loan for …": pick its ProjectionLab loan account there. A notice in Map Accounts lists what moved and lets you download your previous mappings.
 
 ### Splitting an account
 
@@ -268,7 +320,7 @@ How the rules work:
 
 - **Each ProjectionLab account has one row**, and a row can still sum several Monarch accounts. A row can mix whole accounts and splits (for example, 10% of a 401(k) plus a whole Roth IRA into one "Roth" account).
 - **Each Monarch account's splits must add up to 100% across all rows.** Percentages inside one row are never added to each other: a row with 15% of one 401(k) and 20% of another is fine because they are from different Monarch accounts. The total must be 100% per each Monarch account being split.
-- **Not at 100%? Nothing syncs.** If any split account totals more or less than 100%, Setup shows a warning and hides the **Ready to Sync** pill, the popup shows **Incomplete split percentages** instead of **Sync Now**, and scheduled auto-syncs are skipped. Fix the split and syncing resumes. Under 100%, Setup also shows the dollars that wouldn't sync anywhere; over 100%, the account turns red.
+- **Not at 100%? Nothing syncs.** If any split account totals more or less than 100%, Setup shows a warning and hides the **Ready to Sync** pill, the popup shows **Incomplete split percentages** instead of **Sync Now**. Fix the split and syncing resumes. Under 100%, Setup also shows the dollars that wouldn't sync anywhere; over 100%, the account turns red.
 
   <kbd><img src="screenshots/split-rows-under-100.png" width="600" alt="Two rows sharing one checking account at 50% and 40%, each warning that it is 90% allocated"></kbd>
 - **A 0% split never syncs**, so it can't inadvertently overwrite a ProjectionLab balance to $0.
@@ -280,17 +332,15 @@ Split percentages do not update themselves. You will need to periodically review
 
 ### Sync Accounts
 
-Once setup is complete, syncing is a one-step process:
+Once setup is complete, syncing takes two open tabs and one click:
 
-1. Navigate to `app.monarchmoney.com` in Chrome (and make sure you're logged in)
-2. Click the Chrysalis icon in your toolbar
-3. Click **Sync Now**
+1. Have **Monarch** (`app.monarch.com`) open in a tab and be signed in
+2. Have **ProjectionLab** open in a tab and be signed in (`app.projectionlab.com`, or `ea.projectionlab.com` if you turned on Early Access in Step 1)
+3. Click the Chrysalis icon in your toolbar, then click **Sync Now**
 
-<kbd><img src="screenshots/popup-ready-to-sync-first-time.png" width="400"></kbd>
+The popup checks both for you. Each one has a dot that stays gray until that site is open and signed in, then turns green. If one isn't ready, a small button next to it opens that site (or jumps to its tab). **Sync Now** turns on once both dots are green. You can open the popup from any tab.
 
-The sync button is only active when you're on the Monarch site. This is intentional — Chrysalis reads your session directly from the Monarch page, so the page needs to be open. If you're on a different tab and click the popup, it instructs you to go to a Monarch tab first before you can sync, as seen here:
-
-<kbd><img src="screenshots/popup-wrong-tab.png" width="400"></kbd>
+Chrysalis reads balances through your Monarch tab and writes them through your ProjectionLab tab, so both need to be open. This is intentional: it reuses the sessions you're already signed into instead of storing any credentials.
 
 After you have at least 1 sync in the cache, the popup will also include details about the past syncs. An expandable gray section appears showing you the most recent sync job that occurred. You also have links out to each sync in memory in the table below. Clicking **View History** opens the Sync History page, while clicking a row in the table opens that specific record.
 
@@ -306,7 +356,7 @@ Chrysalis never sees or stores your Monarch or ProjectionLab username or passwor
 
 **Monarch** is authenticated by reusing the session you're already logged into. When you sync, Chrysalis reads the CSRF token that Monarch's web app keeps in the page — via a `MAIN`-world script injected into your open Monarch tab — and sends it together with your browser's existing Monarch session cookies on the API request. Because it rides on your existing session, there are no credentials to store and **no extra browser permissions** are required (notably, the `cookies` permission is *not* used). This is also why syncing only works while a Monarch tab is open.
 
-**ProjectionLab** is authenticated with the Plugin API key you saved in Step 1. Requests go to `app.projectionlab.com` by default, or `ea.projectionlab.com` if you opted into Early Access.
+**ProjectionLab** is authenticated with the Plugin API key you saved in Step 1, through the Plugin API on your open, signed-in ProjectionLab tab (`app.projectionlab.com` by default, or `ea.projectionlab.com` if you opted into Early Access). Before you sync, the popup checks that the Plugin API is available on that tab and that it accepts your key.
 
 ### Fetching balances
 
@@ -370,10 +420,6 @@ To help ensure people don't accidentally take an irreversible action on their Ch
 
 This checkbox will inject more detailed, technical debug details in 2 places: (1) on the extension popup after a sync job has run, and (2) at the bottom of any sync record under Sync History. If something is wonky, this is a good place to start.
 
-### Run sync automatically
-
-If you want to, you can enable a time-based sync job daily, weekly, monthly, or quarterly, and you can choose the day or week or day of month and time of day for it to run. **Note:** The scheduled job will only work if the base conditions are met for processing, being that you must have Google Chrome open, your computer awake, and a Monarch tab must be open in your browser in an active session.
-
 ### Sync history retention
 
 If you want to automatically clear out your sync history data based on their age, you can use this as a TTL (time-to-live) setting. Enter the number of days that is the acceptable age of sync history records. When they have passed this age, they will be automatically deleted when the next sync job runs. If you leave this blank, records will be retained forever (or, until you manually delete them - see below).
@@ -404,11 +450,15 @@ Backups include your splits and their notes. Files downloaded from older version
 
 **"Failed to fetch" or Monarch accounts won't load**
 
-Make sure you're logged into Monarch Money and that the Monarch tab is open when you sync (Chrysalis reads its auth from that tab). Try refreshing the Monarch page and syncing again. If you're still having issues, go to the Advanced section under Setup and click the "Run Monarch diagnosis" button. It will generate some text that should help you solve the issue.
+Make sure you're logged into Monarch Money and that the Monarch tab is open when you sync (Chrysalis reads its auth from that tab). The popup's Monarch dot turns green once it can reach your signed-in session. Try refreshing the Monarch page and syncing again. If you're still having issues, go to the Advanced section under Setup and click the "Run Monarch diagnosis" button. It will generate some text that should help you solve the issue.
 
 **"ProjectionLab plugin API not found"**
 
 Plugins are not enabled in your ProjectionLab account. Go to Account Settings → Plugins and toggle them on. If ProjectionLab still won't connect after your API key is enabled and entered in Setup, then go to the Advanced section under setup and click the "Run ProjectionLab diagnosis" button. It will generate some text that should help you solve the issue.
+
+**ProjectionLab dot stays gray when ProjectionLab is open**
+
+If your ProjectionLab tab is on `ea.projectionlab.com`, turn on **Opt in to ProjectionLab Early Access** in Setup → Step 1. Without it, Chrysalis only looks for `app.projectionlab.com` tabs.
 
 **Balances look wrong after sync**
 
@@ -420,7 +470,7 @@ Check the sync result detail in the popup — if a many-to-one mapping is partia
 
 ## ⚠️ Known limitations
 
-- Chrysalis requires the Monarch tab to be open when syncing. This is a trade-off for not needing to store your credentials.
+- Chrysalis requires both a Monarch tab and a ProjectionLab tab to be open (and signed in) when syncing. This is a trade-off for not needing to store your credentials. For the same reason there's no scheduled or background sync.
 - ProjectionLab accounts must already exist. Chrysalis cannot create new accounts, only update balances on existing ones. This is a limitation of the ProjectionLab API which does not expose any "create account" method.
 - This uses Monarch's internal GraphQL API, which is unofficial and unversioned. It could change without notice. See [Contributing](#contributing) for how to report or fix breakage.
 
