@@ -209,6 +209,26 @@ Chrysalis is [available on the Google Chrome Web Store](https://chromewebstore.g
 
 The Chrysalis icon will appear in your Chrome toolbar. Pin it for easy access.
 
+### Load from source (Load unpacked)
+
+To run Chrysalis from this repo instead of the Web Store version, build it with the packaging script. You need [Node.js](https://nodejs.org) 18 or newer.
+
+```
+git clone https://github.com/tyler-class/Chrysalis.git
+cd Chrysalis
+./scripts/package.sh
+```
+
+The script runs the tests, copies only the files the extension uses into `dist/chrysalis-<version>/`, and checks them. Then:
+
+1. Open `chrome://extensions` and turn on **Developer mode** (top right).
+2. Click **Load unpacked** and pick the `dist/chrysalis-<version>/` folder.
+3. Pin the Chrysalis icon and follow [Setup](#%EF%B8%8F-setup).
+
+To update, pull the latest code, run `./scripts/package.sh` again, and click the reload icon on the Chrysalis card in `chrome://extensions`.
+
+An unpacked copy is a separate extension from the Web Store one. It doesn't update itself and doesn't share settings, so use [Back up or restore mappings](#back-up-or-restore-mappings) to move your mappings over. Run only one of the two at a time.
+
 ---
 
 ## ⚙️ Setup
@@ -490,6 +510,8 @@ Contributions are welcome, especially fixes when Monarch or ProjectionLab change
 ```
 node --test tests/*.test.js
 ```
+
+To build and load your changes, see [Load from source](#load-from-source-load-unpacked).
 
 When you [open an Issue](https://github.com/tyler-class/Chrysalis/issues), please include:
 
