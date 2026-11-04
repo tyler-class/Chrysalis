@@ -37,14 +37,15 @@
   const ANNOUNCEMENTS = [
     {
       id: 'v1.3.0-ea',
-      title: 'New in v1.3.0 — ProjectionLab Early Access support',
+      title: "New in v1.3.0 — support for ProjectionLab's new API",
       body:
-        '<strong>Chrysalis now works with the new ProjectionLab Early Access.</strong> ' +
+        "<strong>Chrysalis now supports ProjectionLab's new plugin API.</strong> " +
+        "It's on ProjectionLab Early Access now and moves to Production soon. " +
         'The main change is how assets are mapped: ProjectionLab now keeps a loan as its own ' +
         'account, so an asset and its loan each get their own row. Chrysalis moved your ' +
         'existing asset + loan rows for you. Check them in Setup → Map Accounts.',
       linkText: 'What changed ↗',
-      linkUrl: 'https://github.com/tyler-class/Chrysalis#assets-and-loans-on-projectionlab-early-access',
+      linkUrl: 'https://github.com/tyler-class/Chrysalis#assets-and-loans-with-projectionlabs-new-api',
       expires: '2027-03-31', // disappears on 2027-03-31 (shows through 2027-03-30)
       when: async () => {
         const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
