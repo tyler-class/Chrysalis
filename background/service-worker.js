@@ -1,7 +1,7 @@
 /**
  * Background service worker — Chrysalis: syncs Monarch → ProjectionLab.
- * Tries HTTP API first (key-only auth; request visible in extension's Network tab).
- * Falls back to in-page API if HTTP is not available.
+ * Balances are read through an open, signed-in Monarch tab and written through the plugin API
+ * on an open, signed-in ProjectionLab tab. There is no background or scheduled sync.
  */
 
 import '../shared/mapping-storage.js';
@@ -22,13 +22,9 @@ async function getPlOrigins() {
   return plUseEarlyAccess ? [EA_PL_ORIGIN, APP_PL_ORIGIN] : [APP_PL_ORIGIN];
 }
 const MONARCH_ORIGIN = 'https://app.monarch.com';
-function buildPLUpdateHttpUrl(origin) {
-  return origin + '/api/plugin/updateAccount';
-}
 function plOriginForUrl(url) {
   return ALL_PL_ORIGINS.find((o) => typeof url === 'string' && url.startsWith(o)) || null;
 }
-const AUTO_SYNC_ALARM = 'chrysalis-auto-sync';
 
 /**
  * Data for updateAccount(accountId, data, options). PL does Object.assign(account, data).
@@ -92,32 +88,91 @@ async function findMonarchTab() {
 }
 
 /**
- * Update one account via HTTP. Sends force: true so the server skips the "property must exist on account" check
- * (same as in-page options.force — allows assigning balance/balanceType or amount/amountType even if strict check would fail).
+ * Which plugin API contract a ProjectionLab tab serves, checked fresh on every sync (never cached
+ * or inferred from the hostname). V5 (`version: 2`) also returns a fresh getAccounts() list, which
+ * decides each write's field and catches archived or deleted accounts before anything is written.
+ * Resolves to { contract, accounts? } or { error }.
  */
-async function updateViaHttp(apiKey, plId, data, origin) {
-  // Coerce accountId to string — PL validates strictly, and EA can return
-  // numeric IDs that got persisted into the mapping as numbers.
-  const body = { accountId: String(plId), key: apiKey, force: true, ...data };
-  const res = await fetch(buildPLUpdateHttpUrl(origin), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (typeof console !== 'undefined' && console.log) {
-    const logBody = { ...body };
-    if (logBody.key) logBody.key = '[REDACTED]';
-    console.log('[Chrysalis] HTTP', res.status, plId, logBody, text.slice(0, 200));
+async function connectPLTab(plTabId, apiKey) {
+  let results;
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId: plTabId },
+      world: 'MAIN',
+      func: async (key) => {
+        const api = window.projectionlabPluginAPI;
+        if (!api) return { error: 'Plugin API not available' };
+        const contract = api.version == null ? 1 : api.version;
+        if (contract !== 2) return { contract };
+        try {
+          const list = await api.getAccounts({ key: key });
+          return {
+            contract,
+            rawAccounts: (Array.isArray(list) ? list : []).map((a) => ({
+              id: a.id, name: a.name, kind: a.kind, type: a.type, subtype: a.subtype, securedByAssetId: a.securedByAssetId,
+            })),
+          };
+        } catch (e) {
+          return { contract, error: e.message || String(e) };
+        }
+      },
+      args: [apiKey],
+    });
+  } catch (e) {
+    return { error: e.message || String(e) };
   }
-  if (!res.ok) {
-    return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 150)}` };
+  const payload = results && results[0] && results[0].result;
+  if (!payload) return { error: 'Could not run script on the ProjectionLab tab' };
+  if (payload.rawAccounts) {
+    payload.accounts = payload.rawAccounts.map(Model.normalizeV5Account).filter(Boolean);
+    delete payload.rawAccounts;
   }
-  return { success: true };
+  return payload;
 }
 
 /**
- * Run updateAccount in the page context. Each update has { plId, data } (data built by buildPayload).
+ * V5 writes: one updateAccountValues() call per planned write, with no retries and never through
+ * the V4 path. Re-checks the contract first in case the tab reloaded onto a different version.
+ * writes: [{ plId, values }] from Model.planV5Writes. Returns [{ plId, success, error? }].
+ */
+async function runPLV5WritesInTab(plTabId, writes, apiKey) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: plTabId },
+    world: 'MAIN',
+    func: async (writesJson, key) => {
+      const writes = JSON.parse(writesJson);
+      const api = window.projectionlabPluginAPI;
+      if (!api || api.version !== 2 || typeof api.updateAccountValues !== 'function') {
+        const error = 'ProjectionLab changed plugin API versions during the sync. Nothing was written. Sync again.';
+        return writes.map((w) => ({ plId: w.plId, success: false, error }));
+      }
+      const out = [];
+      for (const w of writes) {
+        try {
+          await api.updateAccountValues({ accountId: String(w.plId), values: w.values, key: key });
+          out.push({ plId: w.plId, success: true });
+        } catch (e) {
+          out.push({ plId: w.plId, success: false, error: e.message || String(e) });
+        }
+      }
+      try {
+        const toast = document.createElement('div');
+        toast.id = 'monarch-pl-sync-toast';
+        toast.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999999;background:#181c27;color:#34d58e;border:1px solid #34d58e;padding:12px 16px;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+        toast.textContent = 'Chrysalis ran • ' + out.filter(function (r) { return r.success; }).length + '/' + writes.length + ' updated';
+        document.body.appendChild(toast);
+        setTimeout(function () { try { toast.remove(); } catch (_) {} }, 5000);
+      } catch (_) {}
+      return out;
+    },
+    args: [JSON.stringify(writes), apiKey],
+  });
+  const payload = results && results[0] && results[0].result;
+  return Array.isArray(payload) ? payload : writes.map((w) => ({ plId: w.plId, success: false, error: 'No result from the ProjectionLab tab' }));
+}
+
+/**
+ * Run updateAccount in the page context (plugin API V4 only). Each update has { plId, data } (data built by buildPayload).
  * Returns array of { plId, success, error }.
  */
 async function runPLUpdatesInTab(plTabId, updatesWithPayload, apiKey) {
@@ -249,6 +304,37 @@ function buildSplitSnapshot(allocations, balanceMap, splitMeta) {
  * Run full sync using the given Monarch tab ID (for fetching balances).
  * Returns { success, partialSuccess?, results?, error? }.
  */
+/**
+ * Before a sync: if the open ProjectionLab tab serves the newer account format, move two-lane
+ * asset + loan rows to one account per row and save them, keeping the old rows as a backup and
+ * leaving the same notice Setup shows. Returns null when there's nothing to move (no ProjectionLab
+ * tab, older format, or no two-lane rows). Otherwise { mappings, summary, unmatched }, where
+ * `unmatched` holds the new loan rows that still need a ProjectionLab account picked in Setup.
+ */
+async function migrateLoanRowsBeforeSync(accountMappings, splitMeta, plApiKey) {
+  const found = await findPLTab();
+  if (!found) return null;
+  const conn = await connectPLTab(found.tab.id, plApiKey);
+  if (conn.error || conn.contract !== Model.PL_CONTRACT_V5 || !conn.accounts) return null;
+  const plan = Model.planV5LoanMigration(accountMappings, conn.accounts, splitMeta, {
+    extensionVersion: chrome.runtime.getManifest().version,
+  });
+  if (!plan) return null;
+  // Backup first, so the old rows can always be downloaded even if saving the new ones fails.
+  await chrome.storage.local.set({ mappingsBackupBeforeLoanUpdate: { savedAt: Date.now(), backup: plan.backup } });
+  await globalThis.ChrysalisMappingStorage.saveMappings(Model.serializeMappings(plan.mappings));
+  await chrome.storage.local.set({
+    // `source: 'sync'` tells an open Setup page to reload instead of keeping the old rows.
+    loanUpdateNotice: { at: Date.now(), source: 'sync', ...plan.summary },
+    // Setup lists ProjectionLab accounts from this cache; keep it in the same format as the rows.
+    cachedPLAccounts: conn.accounts,
+  });
+  await chrome.storage.local.remove(['plAccountUpdateNeeded']);
+  const before = new Set(accountMappings);
+  const unmatched = new Set(plan.mappings.filter((m) => !before.has(m) && !m.plId));
+  return { mappings: plan.mappings, summary: plan.summary, unmatched };
+}
+
 async function runSyncWithTabId(tabId) {
   let sync;
   let rawMappings;
@@ -271,13 +357,27 @@ async function runSyncWithTabId(tabId) {
     console.warn('[Chrysalis] Could not load split notes:', e);
   }
     const plApiKey = sync.plApiKey;
-    const accountMappings = Model.normalizeMappings(rawMappings || []);
+    let accountMappings = Model.normalizeMappings(rawMappings || []);
 
     if (!plApiKey || !plApiKey.trim()) {
       return { success: false, error: 'ProjectionLab API key not configured' };
     }
     if (accountMappings.length === 0) {
       return { success: false, error: 'No account mappings configured' };
+    }
+
+    // ProjectionLab's newer account format keeps each loan as its own account. If two-lane
+    // asset + loan rows are still saved, move them now (the same way Setup does) so this sync
+    // writes loans to their own accounts instead of skipping them.
+    let loanMigration = null;
+    if (accountMappings.some((m) => isAssetWithLoanMapping(m))) {
+      try {
+        loanMigration = await migrateLoanRowsBeforeSync(accountMappings, splitMeta, plApiKey);
+        if (loanMigration) accountMappings = loanMigration.mappings;
+      } catch (e) {
+        // Not fatal: the old rows still sync safely (asset value only) and the popup says why.
+        console.warn('[Chrysalis] Could not move loans to their own rows before syncing:', e);
+      }
     }
 
     // Nothing syncs while a split account's shares don't total 100% (this also covers
@@ -334,8 +434,24 @@ async function runSyncWithTabId(tabId) {
     const planByIndex = new Map(plannedRows.map((p) => [p.mappingIndex, p]));
 
     for (const [mappingIndex, mapping] of accountMappings.entries()) {
-      // Rows without a ProjectionLab account are unfinished in Setup; skip them.
-      if (!mapping.plId) continue;
+      // Rows without a ProjectionLab account are unfinished in Setup; skip them. A loan row that
+      // was just moved but couldn't be matched to a ProjectionLab loan is reported instead.
+      if (!mapping.plId) {
+        if (loanMigration && loanMigration.unmatched.has(mapping)) {
+          results.push({
+            plName: mapping.title || 'Loan',
+            plId: '',
+            plType: 'debt',
+            plNativeType: '',
+            monarchAccounts: (mapping.monarchAccounts || []).map((a) => a.name),
+            aggregatedBalance: 0,
+            isAggregated: false,
+            success: false,
+            error: "This loan wasn't synced. Pick its ProjectionLab loan account in Setup → Map Accounts.",
+          });
+        }
+        continue;
+      }
       const isDual = isAssetWithLoanMapping(mapping);
       const monarchAccounts = mapping.monarchAccounts || [];
       const monarchAccountsLoan = mapping.monarchAccountsLoan || [];
@@ -478,36 +594,49 @@ async function runSyncWithTabId(tabId) {
     });
 
     let plResults = [];
+    let plContract = null;
+    const v5ValuesByPlId = new Map(); // V5 writes, for the debug view
     let lastSyncMethod = 'none';
     let plTabUrl = null;
     if (updatesToRun.length > 0) {
       const found = await findPLTab();
       if (found) {
         const { tab: plTab, origin } = found;
-        lastSyncMethod = 'in-page (PL tab)';
         plTabUrl = plTab.url || null;
-        plResults = await runPLUpdatesInTab(plTab.id, updatesWithPayload, plApiKey);
-        // Persist the origin we just synced against so HTTP fallback on future runs
-        // knows which instance to hit.
+        const conn = await connectPLTab(plTab.id, plApiKey);
+        plContract = conn.contract || null;
+        lastSyncMethod = `in-page (PL tab${plContract ? `, plugin API v${plContract}` : ''})`;
+        if (conn.error) {
+          plResults = updatesWithPayload.map((u) => ({ plId: u.plId, success: false, error: conn.error }));
+        } else if (conn.contract === Model.PL_CONTRACT_V4) {
+          plResults = await runPLUpdatesInTab(plTab.id, updatesWithPayload, plApiKey);
+        } else if (conn.contract === Model.PL_CONTRACT_V5) {
+          // Two-lane asset + loan rows still exist: Setup moves them once it syncs ProjectionLab
+          // accounts in the new format. Until then the popup shows a notice.
+          if (updatesToRun.some((u) => u.isAssetWithLoan)) {
+            try { await chrome.storage.local.set({ plAccountUpdateNeeded: true }); } catch (_) {}
+          }
+          const planned = Model.planV5Writes(updatesToRun, conn.accounts);
+          const writes = planned.filter((p) => p.values);
+          for (const p of writes) v5ValuesByPlId.set(p.plId, p.values);
+          const written = writes.length ? await runPLV5WritesInTab(plTab.id, writes, plApiKey) : [];
+          const writtenById = new Map(written.map((r) => [r.plId, r]));
+          plResults = planned.map((p) => {
+            const r = p.values ? (writtenById.get(p.plId) || { plId: p.plId, success: false, error: 'No result from the ProjectionLab tab' }) : { plId: p.plId, success: false, error: p.error };
+            return p.warning ? { ...r, warning: p.warning } : r;
+          });
+        } else {
+          const error = Model.unsupportedPlContractMessage(conn.contract);
+          plResults = updatesWithPayload.map((u) => ({ plId: u.plId, success: false, error }));
+        }
+        // Remember the instance we just synced against; Setup's origin detection reuses it.
         try { await chrome.storage.local.set({ plOrigin: origin }); } catch (_) {}
       } else {
-        // No PL tab open — fall back to HTTP. Prefer the cached origin (set by
-        // a previous successful in-page sync or by setup's detectPLOrigin), but
-        // only if it's still allowed by the user's current Early Access setting.
-        // Otherwise use the preferred origin for that setting (app.* unless the
-        // user has opted into Early Access). This auto-corrects a stale ea.*
-        // cache after the user turns Early Access back off.
-        const { plOrigin: cachedOrigin } = await chrome.storage.local.get(['plOrigin']);
-        const httpOrigins = await getPlOrigins();
-        const httpOrigin =
-          cachedOrigin && httpOrigins.includes(cachedOrigin)
-            ? cachedOrigin
-            : httpOrigins[0];
-        lastSyncMethod = `HTTP ${httpOrigin} (no PL tab; see extension service worker Network)`;
-        for (const u of updatesWithPayload) {
-          const hr = await updateViaHttp(plApiKey, u.plId, u.data, httpOrigin);
-          plResults.push({ plId: u.plId, success: hr.success, error: hr.error });
-        }
+        // No ProjectionLab tab: nothing can be written. The popup only enables Sync Now once a
+        // signed-in ProjectionLab tab is open, so this only happens if it closed mid-sync.
+        lastSyncMethod = 'none (no ProjectionLab tab open)';
+        const error = 'ProjectionLab isn\'t open. Open ProjectionLab in a tab, sign in, and sync again.';
+        plResults = updatesWithPayload.map((u) => ({ plId: u.plId, success: false, error }));
       }
     }
     const byPlId = new Map(plResults.map((r) => [r.plId, r]));
@@ -538,6 +667,10 @@ async function runSyncWithTabId(tabId) {
       if (pr) {
         r.success = pr.success;
         if (!pr.success && pr.error) r.error = pr.error;
+        if (pr.warning) {
+          r.warning = r.warning ? `${r.warning} ${pr.warning}` : pr.warning;
+          partialSuccess = true;
+        }
         if (pr.debug && pr.debug.callForm) r.callForm = pr.debug.callForm;
       }
     }
@@ -548,6 +681,7 @@ async function runSyncWithTabId(tabId) {
     const firstError = results.find((r) => r.error);
     const lastSyncDebug = {
       method: lastSyncMethod,
+      plContract: plContract || undefined,
       plTabUrl: plTabUrl || undefined,
       callFormTally: Object.keys(callFormTally).length ? callFormTally : undefined,
       updates: results
@@ -558,10 +692,12 @@ async function runSyncWithTabId(tabId) {
           balance: r.aggregatedBalance,
           // Include accountId in the payload display so the debug column shows
           // the full set of fields being sent to updateAccount, not just data.
-          payload: {
-            accountId: String(r.plId),
-            ...(payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance)),
-          },
+          payload: plContract === Model.PL_CONTRACT_V5
+            ? { accountId: String(r.plId), values: v5ValuesByPlId.get(r.plId) || null } // updateAccountValues
+            : {
+                accountId: String(r.plId),
+                ...(payloadByPlId.get(r.plId) || buildPayload(r.plType, r.plNativeType, r.aggregatedBalance)),
+              },
           callForm: r.callForm || undefined,
           success: r.success,
           error: r.error || null,
@@ -611,8 +747,83 @@ async function runSyncWithTabId(tabId) {
   };
 }
 
+// ---------- Sync readiness (the popup's two checks) ----------
+
+// A signed-in Monarch result is reused briefly so the popup's polling doesn't query Monarch every
+// few seconds.
+const MONARCH_AUTH_CACHE_MS = 20000;
+let monarchAuthCache = { tabId: null, at: 0 };
+
+/** Monarch: a tab is open, and Monarch answers a signed-in request from it. */
+async function checkMonarchReady() {
+  const tab = await findMonarchTab();
+  if (!tab) return { ok: false, reason: 'not_open' };
+  if (/\/(login|signup|sign-in|signin)\b/i.test(tab.url || '')) return { ok: false, tabId: tab.id, reason: 'signed_out' };
+  if (monarchAuthCache.tabId === tab.id && Date.now() - monarchAuthCache.at < MONARCH_AUTH_CACHE_MS) {
+    return { ok: true, tabId: tab.id };
+  }
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-scripts/monarch.js'] });
+    const res = await chrome.tabs.sendMessage(tab.id, { type: 'CHECK_AUTH' });
+    if (res && res.success) {
+      monarchAuthCache = { tabId: tab.id, at: Date.now() };
+      return { ok: true, tabId: tab.id };
+    }
+    return { ok: false, tabId: tab.id, reason: 'signed_out' };
+  } catch (_) {
+    // Still loading, or a page the extension can't run on yet.
+    return { ok: false, tabId: tab.id, reason: 'loading' };
+  }
+}
+
+/**
+ * ProjectionLab: a tab is open on the instance the Early Access setting allows, the plugin API is
+ * on the page (it only appears once signed in with Plugins enabled), and it accepts the saved key.
+ */
+async function checkPLReady() {
+  const found = await findPLTab();
+  if (!found) return { ok: false, reason: 'not_open' };
+  const tabId = found.tab.id;
+  const { plApiKey } = await chrome.storage.sync.get(['plApiKey']);
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: async (key) => {
+        const api = window.projectionlabPluginAPI;
+        if (!api || typeof api.validateApiKey !== 'function') return { state: 'no_api' };
+        try {
+          // Awaited: if validateApiKey is async, a rejected key only shows up as a rejected
+          // promise, which a bare try/catch never sees (it would report every key as accepted).
+          // An explicit `false` result also counts as rejected.
+          const accepted = await api.validateApiKey({ key: key });
+          return { state: accepted === false ? 'bad_key' : 'ok' };
+        } catch (_) {
+          return { state: 'bad_key' };
+        }
+      },
+      args: [plApiKey || ''],
+    });
+    const state = results && results[0] && results[0].result && results[0].result.state;
+    if (state === 'ok') return { ok: true, tabId };
+    return { ok: false, tabId, reason: state || 'loading' };
+  } catch (_) {
+    return { ok: false, tabId, reason: 'loading' };
+  }
+}
+
+async function checkSyncReadiness() {
+  const [monarch, pl] = await Promise.all([checkMonarchReady(), checkPLReady()]);
+  return { monarch, pl, ready: monarch.ok && pl.ok };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type == 'RUN_SYNC') {
+  if (message.type == 'CHECK_READINESS') {
+    checkSyncReadiness()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ ready: false, error: err.message || String(err) }));
+    return true;
+  } else if (message.type == 'RUN_SYNC') {
       const tabId = message.tabId;
       if (tabId == null) {
         sendResponse({ success: false, error: 'Missing tabId' });
@@ -642,98 +853,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== AUTO_SYNC_ALARM) return;
-  const monarchTab = await findMonarchTab();
-  if (!monarchTab) return;
-  try {
-    await runSyncWithTabId(monarchTab.id);
-  } catch (e) {
-    console.error('[Chrysalis] auto-sync', e.message || e);
-  }
-  scheduleAutoSync(); // schedule next run
+// Auto-sync was removed in v1.2.3: it relied on a no-tab HTTP write path that didn't work.
+// Clean up the alarm and settings left by earlier versions.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.sync.remove([
+    'autoSyncEnabled', 'autoSyncFrequency', 'autoSyncDayOfWeek',
+    'autoSyncDayOfMonth', 'autoSyncTimeHour', 'autoSyncTimeMinute',
+  ]).catch(() => {});
 });
-
-/**
- * Compute next run timestamp (ms) from now. Uses local time.
- * sync: { autoSyncFrequency, autoSyncDayOfWeek 0-6, autoSyncDayOfMonth 1-28, autoSyncTimeHour 0-23, autoSyncTimeMinute 0-59 }
- */
-function getNextRunTs(now, sync) {
-  const freq = sync.autoSyncFrequency || 'daily';
-  const dayOfWeek = Math.max(0, Math.min(6, parseInt(sync.autoSyncDayOfWeek, 10) || 0));
-  const dayOfMonth = Math.max(1, Math.min(28, parseInt(sync.autoSyncDayOfMonth, 10) || 1));
-  const hour = Math.max(0, Math.min(23, parseInt(sync.autoSyncTimeHour, 10) || 9));
-  const minute = Math.max(0, Math.min(59, parseInt(sync.autoSyncTimeMinute, 10) || 0));
-
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
-
-  if (freq === 'daily') {
-    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
-    return next.getTime();
-  }
-
-  if (freq === 'weekly') {
-    const currentDOW = next.getDay();
-    let daysToAdd = dayOfWeek - currentDOW;
-    if (daysToAdd < 0) daysToAdd += 7;
-    if (daysToAdd === 0 && next.getTime() <= now.getTime()) daysToAdd = 7;
-    next.setDate(next.getDate() + daysToAdd);
-    return next.getTime();
-  }
-
-  if (freq === 'monthly') {
-    next.setDate(Math.min(dayOfMonth, 28));
-    if (next.getTime() <= now.getTime()) next.setMonth(next.getMonth() + 1);
-    return next.getTime();
-  }
-
-  if (freq === 'quarterly') {
-    const qMonths = [0, 3, 6, 9]; // Jan, Apr, Jul, Oct
-    const yr = now.getFullYear();
-    for (const m of qMonths) {
-      const d = new Date(yr, m, Math.min(dayOfMonth, 28), hour, minute, 0, 0);
-      if (d.getTime() > now.getTime()) return d.getTime();
-    }
-    return new Date(yr + 1, 0, Math.min(dayOfMonth, 28), hour, minute, 0, 0).getTime();
-  }
-
-  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
-  return next.getTime();
-}
-
-function scheduleAutoSync() {
-  chrome.storage.sync.get(
-    [
-      'autoSyncEnabled',
-      'autoSyncFrequency',
-      'autoSyncDayOfWeek',
-      'autoSyncDayOfMonth',
-      'autoSyncTimeHour',
-      'autoSyncTimeMinute',
-    ],
-    (sync) => {
-      chrome.alarms.clear(AUTO_SYNC_ALARM);
-      if (!sync.autoSyncEnabled || !sync.autoSyncFrequency) return;
-      const when = getNextRunTs(new Date(), sync);
-      chrome.alarms.create(AUTO_SYNC_ALARM, { when });
-    }
-  );
-}
-
-chrome.runtime.onStartup.addListener(scheduleAutoSync);
-
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'sync') return;
-  const keys = [
-    'autoSyncEnabled',
-    'autoSyncFrequency',
-    'autoSyncDayOfWeek',
-    'autoSyncDayOfMonth',
-    'autoSyncTimeHour',
-    'autoSyncTimeMinute',
-  ];
-  if (!keys.some((k) => changes[k])) return;
-  scheduleAutoSync();
-});
-
-scheduleAutoSync();

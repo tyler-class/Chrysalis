@@ -113,23 +113,101 @@
     contentEl.querySelector('#open-setup-cta').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
-  function renderNotOnMonarch(plCount, monarchTotal) {
-    setStatus('gray', 'To use Chrysalis, open the Monarch app, then click the extension icon again.');
-    contentEl.innerHTML = `
-      <a href="${MONARCH_ORIGIN}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="open-monarch-link" style="text-decoration:none;display:inline-flex">
-        Go to Monarch
-      </a>
-    `;
+  // ---------- Sync readiness: two checks, then Sync Now ----------
+  //
+  // Sync only ever reads Monarch through an open, signed-in Monarch tab and writes ProjectionLab
+  // through an open, signed-in ProjectionLab tab. The popup checks both (via the service worker)
+  // when it opens and every few seconds while open; Sync Now stays disabled until both are green.
+
+  const READINESS_POLL_MS = 3000;
+  // What each not-ready state needs, as one short action. Hover text gives the detail.
+  const READY_ACTIONS = {
+    not_open: { label: 'Open', tip: (name) => `Open ${name} in a new tab` },
+    signed_out: { label: 'Sign in', tip: (name) => `Go to your ${name} tab and sign in` },
+    no_api: { label: 'Sign in', tip: () => 'Go to your ProjectionLab tab, sign in, and make sure Plugins are enabled' },
+    bad_key: { label: 'Fix key', tip: () => "ProjectionLab didn't accept your API key. Update it in Setup." },
+  };
+  const READY_LIST_HTML =
+    '<p class="ready-intro">To sync, have Monarch and ProjectionLab open in tabs and signed in.</p>' +
+    '<div class="ready-list" id="ready-list" aria-live="polite"></div>';
+
+  let readiness = null;
+  let readinessTimer = null;
+  let syncing = false;
+
+  async function plOpenOrigin() {
+    const { plUseEarlyAccess } = await chrome.storage.sync.get(['plUseEarlyAccess']);
+    return plUseEarlyAccess ? 'https://ea.projectionlab.com' : 'https://app.projectionlab.com';
   }
 
-  function renderOnMonarch(plCount, monarchTotal) {
-    setStatus('green', 'Ready to sync');
+  /** Bring an existing tab forward, or open the site in a new tab. */
+  async function openSite(site, tabId) {
+    if (tabId != null) {
+      const tab = await chrome.tabs.update(tabId, { active: true });
+      if (tab && tab.windowId != null) chrome.windows.update(tab.windowId, { focused: true });
+      return;
+    }
+    const url = site === 'monarch' ? MONARCH_ORIGIN + '/' : (await plOpenOrigin()) + '/';
+    chrome.tabs.create({ url });
+  }
+
+  function updateReadinessUI() {
+    const list = document.getElementById('ready-list');
+    if (list) {
+      list.innerHTML = [['monarch', 'Monarch'], ['pl', 'ProjectionLab']].map(([site, name]) => {
+        const st = readiness && readiness[site];
+        const state = !st ? 'checking' : st.ok ? 'ok' : (READY_ACTIONS[st.reason] ? st.reason : 'checking');
+        const action = READY_ACTIONS[state];
+        const right = state === 'ok'
+          ? '<span class="ready-connected">Connected</span>'
+          : action
+            ? `<button type="button" class="ready-open" data-site="${site}" data-state="${state}" data-tab="${st.tabId != null ? st.tabId : ''}" title="${escapeHtml(action.tip(name))}">${action.label}</button>`
+            : '<span class="ready-wait" aria-label="Checking">…</span>';
+        return `<div class="ready-row ${state}"><span class="ready-dot" aria-hidden="true"></span><span class="ready-name">${name}</span>${right}</div>`;
+      }).join('');
+      list.querySelectorAll('.ready-open').forEach((b) => {
+        b.onclick = () => {
+          if (b.dataset.state === 'bad_key') { chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') }); return; }
+          openSite(b.dataset.site, b.dataset.tab === '' ? null : Number(b.dataset.tab));
+        };
+      });
+    }
+    const btn = document.getElementById('sync-btn');
+    if (btn && !syncing) btn.disabled = !(readiness && readiness.ready);
+  }
+
+  async function refreshReadiness() {
+    if (syncing) return;
+    try {
+      readiness = await chrome.runtime.sendMessage({ type: 'CHECK_READINESS' });
+    } catch (_) {
+      readiness = null;
+    }
+    updateReadinessUI();
+  }
+
+  function startReadinessPolling() {
+    if (readinessTimer) clearInterval(readinessTimer);
+    refreshReadiness();
+    readinessTimer = setInterval(refreshReadiness, READINESS_POLL_MS);
+  }
+
+  /** Wire Sync Now after a render; it stays disabled until both checks are green. */
+  function bindSyncButton() {
+    const btn = document.getElementById('sync-btn');
+    if (btn) btn.onclick = () => runSync();
+    updateReadinessUI();
+  }
+
+  function renderReadyToSync() {
+    statusBar.classList.add('status-bar-hidden'); // the two rows say it all
     contentEl.innerHTML = `
       <div class="sync-wrap sync-wrap-top">
-        <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn">Sync Now</button>
+        ${READY_LIST_HTML}
+        <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn" disabled>Sync Now</button>
       </div>
     `;
-    contentEl.querySelector('#sync-btn').onclick = () => runSync();
+    bindSyncButton();
   }
 
   function renderSyncing() {
@@ -305,13 +383,14 @@
 
     contentEl.innerHTML = `
       <div class="sync-wrap sync-wrap-top">
-        <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn">Sync Now</button>
+        ${READY_LIST_HTML}
+        <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn" disabled>Sync Now</button>
       </div>
       ${lastSyncSection}
       ${ratingBanner}
       ${syncHistorySection}
     `;
-    contentEl.querySelector('#sync-btn').onclick = () => runSync();
+    bindSyncButton();
 
     const dismissRating = document.getElementById('dismiss-webstore-rating-prompt');
     if (dismissRating) {
@@ -369,13 +448,13 @@
     return div.innerHTML;
   }
 
-  let currentTabId = null;
-
   async function runSync() {
-    if (!currentTabId) return;
+    const monarchTabId = readiness && readiness.ready && readiness.monarch.tabId;
+    if (monarchTabId == null) return;
+    syncing = true;
     renderSyncing();
     try {
-      const res = await chrome.runtime.sendMessage({ type: 'RUN_SYNC', tabId: currentTabId });
+      const res = await chrome.runtime.sendMessage({ type: 'RUN_SYNC', tabId: monarchTabId });
       const [local, syncPref] = await Promise.all([
         chrome.storage.local.get([
           'lastSyncTime',
@@ -398,25 +477,47 @@
           !!local.webstoreRatingPromptDismissed
         );
       } else {
-        setStatus('gray', res.error || 'Sync failed');
-        contentEl.innerHTML = `
-          <div class="cta-card">
-            <p>${escapeHtml(res.error || 'Unknown error')}</p>
-            <button type="button" class="btn btn-primary" id="sync-retry">Sync Now</button>
-          </div>
-        `;
-        document.getElementById('sync-retry').onclick = () => runSync();
+        renderSyncFailed(res.error || 'Unknown error');
       }
     } catch (e) {
-      setStatus('gray', 'Sync failed');
-      contentEl.innerHTML = `
-        <div class="cta-card">
-          <p>${escapeHtml(e.message || String(e))}</p>
-          <button type="button" class="btn btn-primary" id="sync-retry">Sync Now</button>
-        </div>
-      `;
-      document.getElementById('sync-retry').onclick = () => runSync();
+      renderSyncFailed(e.message || String(e));
+    } finally {
+      syncing = false;
+      refreshReadiness();
+      renderAccountUpdateNotice();
     }
+  }
+
+  function renderSyncFailed(message) {
+    statusBar.classList.add('status-bar-hidden');
+    contentEl.innerHTML = `
+      <div class="cta-card">
+        <p>${escapeHtml(message)}</p>
+        <div class="sync-wrap">
+          ${READY_LIST_HTML}
+          <button type="button" class="btn btn-primary btn-sync-now" id="sync-btn" disabled>Sync Now</button>
+        </div>
+      </div>
+    `;
+    bindSyncButton();
+  }
+
+  /**
+   * A sync found asset + loan rows while ProjectionLab is on its newer account format (loans are
+   * their own accounts). Setup moves them on its next ProjectionLab account sync; until then,
+   * point the person there. Doesn't block syncing.
+   */
+  async function renderAccountUpdateNotice() {
+    const slot = document.getElementById('notice-slot');
+    if (!slot) return;
+    const { plAccountUpdateNeeded } = await chrome.storage.local.get(['plAccountUpdateNeeded']);
+    if (!plAccountUpdateNeeded) { slot.innerHTML = ''; return; }
+    slot.innerHTML = `
+      <div class="account-update-notice" role="status">
+        <div>ProjectionLab now keeps each loan as its own account. Open Setup and sync your ProjectionLab accounts to move your loans to their own rows. Until then, loan balances aren't synced.</div>
+        <button type="button" id="account-update-setup">Open Setup ↗</button>
+      </div>`;
+    document.getElementById('account-update-setup').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('setup/setup.html') });
   }
 
   async function init() {
@@ -429,11 +530,6 @@
         chrome.tabs.update({ url: link.href }).then(() => window.close());
       };
     });
-
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tabUrl = tab?.url || '';
-    const onMonarch = tabUrl.startsWith(MONARCH_ORIGIN);
-    currentTabId = tab?.id ?? null;
 
     let sync;
     let local;
@@ -460,9 +556,6 @@
     const plApiKey = sync.plApiKey;
     const mappings = Model.normalizeMappings(rawMappings || []);
     const isConfigured = !!(plApiKey && plApiKey.trim() && mappings.length > 0);
-    const plMappingCount = mappings.length;
-    // A split Monarch account appears in several rows; count it once.
-    const monarchTotal = Model.allSourceIds(mappings).length;
 
     if (!isConfigured) {
       renderNotSetUp();
@@ -486,10 +579,8 @@
       return;
     }
 
-    if (!onMonarch) {
-      renderNotOnMonarch(plMappingCount, monarchTotal);
-      return;
-    }
+    startReadinessPolling();
+    renderAccountUpdateNotice();
 
     if (local.lastSyncResults && local.lastSyncResults.length > 0) {
       renderResults(
@@ -505,7 +596,7 @@
       return;
     }
 
-    renderOnMonarch(plMappingCount, monarchTotal);
+    renderReadyToSync();
   }
 
   init();

@@ -17,6 +17,8 @@
   }
   const MONARCH_ORIGIN = 'https://app.monarch.com';
   const PL_LOAD_DELAY_MS = 4500;
+  // After a Monarch tab we opened finishes loading, give its app a moment to set up the session.
+  const MONARCH_LOAD_DELAY_MS = 2500;
   const PL_API_RETRY_MS = 2000;
   const PL_API_RETRIES = 5;
   const PL_WAIT_FOR_API_MS = 20000;
@@ -528,79 +530,6 @@
       });
     }
 
-    const autoSyncCheckbox = document.getElementById('auto-sync-enabled');
-    const autoSyncFrequency = document.getElementById('auto-sync-frequency');
-    const autoSyncDayWeek = document.getElementById('auto-sync-day-week');
-    const autoSyncDayMonth = document.getElementById('auto-sync-day-month');
-    const autoSyncTime = document.getElementById('auto-sync-time');
-    const dayWeekWrap = document.getElementById('auto-sync-day-week-wrap');
-    const dayMonthWrap = document.getElementById('auto-sync-day-month-wrap');
-
-    if (autoSyncDayMonth) {
-      for (let i = 1; i <= 28; i++) {
-        const opt = document.createElement('option');
-        opt.value = String(i);
-        opt.textContent = String(i);
-        autoSyncDayMonth.appendChild(opt);
-      }
-    }
-    [autoSyncFrequency, autoSyncDayWeek, autoSyncDayMonth].forEach(enhanceSelect);
-
-    function updateAutoSyncVisibility() {
-      const enabled = autoSyncCheckbox && autoSyncCheckbox.checked;
-      const freq = (autoSyncFrequency && autoSyncFrequency.value) || 'daily';
-      // Visibility depends only on which frequency is selected
-      if (dayWeekWrap) dayWeekWrap.style.display = freq === 'weekly' ? 'flex' : 'none';
-      if (dayMonthWrap) dayMonthWrap.style.display = (freq === 'monthly' || freq === 'quarterly') ? 'flex' : 'none';
-      // Editable only when Advanced is unlocked AND "Run sync automatically" is on.
-      const locked = !!(card && card.classList.contains('advanced-locked'));
-      const editable = enabled && !locked;
-      if (autoSyncFrequency) autoSyncFrequency.disabled = !editable;
-      if (autoSyncDayWeek) autoSyncDayWeek.disabled = !editable;
-      if (autoSyncDayMonth) autoSyncDayMonth.disabled = !editable;
-      if (autoSyncTime) autoSyncTime.disabled = !editable;
-    }
-
-    function saveAutoSync() {
-      const enabled = autoSyncCheckbox && autoSyncCheckbox.checked;
-      const freq = (autoSyncFrequency && autoSyncFrequency.value) || 'daily';
-      const dayOfWeek = autoSyncDayWeek ? parseInt(autoSyncDayWeek.value, 10) : 0;
-      const dayOfMonth = autoSyncDayMonth ? parseInt(autoSyncDayMonth.value, 10) : 1;
-      const timeStr = (autoSyncTime && autoSyncTime.value) || '09:00';
-      const [h, m] = timeStr.split(':').map((n) => parseInt(n, 10) || 0);
-      chrome.storage.sync.set({
-        autoSyncEnabled: enabled,
-        autoSyncFrequency: enabled ? freq : '',
-        autoSyncDayOfWeek: dayOfWeek,
-        autoSyncDayOfMonth: dayOfMonth,
-        autoSyncTimeHour: h,
-        autoSyncTimeMinute: m,
-      });
-    }
-
-    if (autoSyncCheckbox && autoSyncFrequency && autoSyncTime) {
-      chrome.storage.sync.get(
-        ['autoSyncEnabled', 'autoSyncFrequency', 'autoSyncDayOfWeek', 'autoSyncDayOfMonth', 'autoSyncTimeHour', 'autoSyncTimeMinute'],
-        (sync) => {
-          autoSyncCheckbox.checked = !!sync.autoSyncEnabled;
-          autoSyncFrequency.value = sync.autoSyncFrequency || 'daily';
-          if (autoSyncDayWeek) autoSyncDayWeek.value = String(Math.max(0, Math.min(6, sync.autoSyncDayOfWeek ?? 1)));
-          if (autoSyncDayMonth) autoSyncDayMonth.value = String(Math.max(1, Math.min(28, sync.autoSyncDayOfMonth ?? 1)));
-          const h = Math.max(0, Math.min(23, sync.autoSyncTimeHour ?? 9));
-          const m = Math.max(0, Math.min(59, sync.autoSyncTimeMinute ?? 0));
-          autoSyncTime.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-          updateAutoSyncVisibility();
-        }
-      );
-      autoSyncCheckbox.addEventListener('change', () => { saveAutoSync(); updateAutoSyncVisibility(); });
-      if (card) card.addEventListener('advanced-lock-change', updateAutoSyncVisibility);
-      updateAutoSyncVisibility(); // before stored settings load, so nothing is briefly editable
-      autoSyncFrequency.addEventListener('change', () => { updateAutoSyncVisibility(); saveAutoSync(); });
-      if (autoSyncDayWeek) autoSyncDayWeek.addEventListener('change', saveAutoSync);
-      if (autoSyncDayMonth) autoSyncDayMonth.addEventListener('change', saveAutoSync);
-      autoSyncTime.addEventListener('change', saveAutoSync);
-    }
-
     const syncHistoryRetentionInput = document.getElementById('sync-history-retention-days');
     if (syncHistoryRetentionInput) {
       chrome.storage.sync.get(['syncHistoryRetentionDays'], (sync) => {
@@ -659,7 +588,7 @@
       monarchAccounts = [];
       plAccounts = [];
       accountMappings = [];
-      await chrome.storage.sync.set({ plApiKey: '', autoSyncEnabled: false });
+      await chrome.storage.sync.set({ plApiKey: '' });
       if (!(await saveMappingsToStorage(accountMappings))) return;
       splitMeta = {};
       await persistSplitMeta();
@@ -980,6 +909,7 @@
     renderMappingRows();
     showLastRefreshed('monarch', local.lastMonarchRefreshTime);
     showLastRefreshed('pl', local.lastPLRefreshTime);
+    renderLoanUpdateNotice();
     // A failed latest sync keeps its red message after a reload, not just until the page closes.
     for (const source of ['monarch', 'pl']) {
       const last = refreshHistory[source][0];
@@ -1045,27 +975,35 @@
    * Returns { tab, openedByUs }. openedByUs=true means we created the tab and
    * the caller is responsible for closing it on failure.
    */
+  /**
+   * Open `url` in a new tab and resolve once it has loaded, plus `settleMs` for the web app to
+   * finish starting up (sign-in session, plugin API). The tab is left open for the user.
+   */
+  async function openTabAndWait(url, { openInBackground = false, settleMs = PL_LOAD_DELAY_MS } = {}) {
+    const tab = await chrome.tabs.create({ url, active: !openInBackground });
+    return new Promise((resolve) => {
+      const listener = (id, info, t) => {
+        if (id !== tab.id) return;
+        if (info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          setTimeout(() => resolve(t), settleMs);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      if (tab.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        setTimeout(() => resolve(tab), settleMs);
+      }
+    });
+  }
+
   async function findOrOpenPLTabForOrigin(origin, { openInBackground = false } = {}) {
     const tabs = await chrome.tabs.query({ url: origin + '/*' });
     if (tabs.length) {
       const appTab = tabs.find((t) => isPLAppTab(t.url));
       return { tab: appTab || tabs[0], openedByUs: false };
     }
-    const tab = await chrome.tabs.create({ url: origin + '/', active: !openInBackground });
-    const loaded = await new Promise((resolve) => {
-      const listener = (id, info, t) => {
-        if (id !== tab.id) return;
-        if (info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          setTimeout(() => resolve(t), PL_LOAD_DELAY_MS);
-        }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
-      if (tab.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(listener);
-        setTimeout(() => resolve(tab), PL_LOAD_DELAY_MS);
-      }
-    });
+    const loaded = await openTabAndWait(origin + '/', { openInBackground });
     return { tab: loaded, openedByUs: true };
   }
 
@@ -1175,28 +1113,47 @@
     throw new Error(`ProjectionLab (${hostList}) didn't accept your API key. Check it in Step 1.`);
   }
 
-  function runPLExportScript(tabId, apiKey) {
-    return chrome.scripting.executeScript({
+  /**
+   * List the ProjectionLab accounts in a tab, on whichever plugin API contract the page serves:
+   * V4 (no `version`) reads exportData().today's four arrays; V5 (`version: 2`) uses getAccounts().
+   * The version is checked in the page on every call, never cached or inferred from the hostname.
+   * Resolves to executeScript's result array; `[0].result` is { accounts, contract } or { error }.
+   */
+  async function runPLExportScript(tabId, apiKey) {
+    const results = await chrome.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
       func: async (key, waitMs, pollMs) => {
         const deadline = Date.now() + waitMs;
         while (Date.now() < deadline) {
-          if (typeof window.projectionlabPluginAPI !== 'undefined' && typeof window.projectionlabPluginAPI.exportData === 'function') {
+          const api = window.projectionlabPluginAPI;
+          if (api && (typeof api.exportData === 'function' || typeof api.getAccounts === 'function')) {
+            const contract = api.version == null ? 1 : api.version;
             try {
-              const data = await window.projectionlabPluginAPI.exportData({ key: key });
-              const today = data.today || data;
-              const accounts = [];
-              const push = (arr, category) => {
-                if (Array.isArray(arr)) arr.forEach((a) => accounts.push({ id: a.id, name: a.name || a.id, type: category || 'asset', nativeType: a.type || '' }));
-              };
-              push(today.savingsAccounts, 'savings');
-              push(today.investmentAccounts, 'investment');
-              push(today.assets, 'asset');
-              push(today.debts, 'debt');
-              return { accounts };
+              if (contract === 1) {
+                const data = await api.exportData({ key: key });
+                const today = data.today || data;
+                const accounts = [];
+                const push = (arr, category) => {
+                  if (Array.isArray(arr)) arr.forEach((a) => accounts.push({ id: a.id, name: a.name || a.id, type: category || 'asset', nativeType: a.type || '' }));
+                };
+                push(today.savingsAccounts, 'savings');
+                push(today.investmentAccounts, 'investment');
+                push(today.assets, 'asset');
+                push(today.debts, 'debt');
+                return { contract, accounts };
+              }
+              if (contract === 2) {
+                const list = await api.getAccounts({ key: key });
+                // Plain copies of the fields Chrysalis uses; normalized outside the page.
+                const rawAccounts = (Array.isArray(list) ? list : []).map((a) => ({
+                  id: a.id, name: a.name, kind: a.kind, type: a.type, subtype: a.subtype, securedByAssetId: a.securedByAssetId,
+                }));
+                return { contract, rawAccounts };
+              }
+              return { contract, error: 'unsupported_version' };
             } catch (e) {
-              return { error: e.message || String(e) };
+              return { contract, error: e.message || String(e) };
             }
           }
           await new Promise((r) => setTimeout(r, pollMs));
@@ -1205,6 +1162,14 @@
       },
       args: [apiKey, PL_WAIT_FOR_API_MS, PL_WAIT_POLL_MS],
     });
+    const payload = results && results[0] && results[0].result;
+    if (payload && payload.contract === Model.PL_CONTRACT_V5 && payload.rawAccounts) {
+      payload.accounts = payload.rawAccounts.map(Model.normalizeV5Account).filter(Boolean);
+      delete payload.rawAccounts;
+    } else if (payload && payload.error === 'unsupported_version') {
+      payload.error = Model.unsupportedPlContractMessage(payload.contract);
+    }
+    return results;
   }
 
   async function fetchPLAccounts() {
@@ -1415,10 +1380,11 @@
     };
 
     try {
-      const monarchTab = await findMonarchTab();
+      let monarchTab = await findMonarchTab();
       if (!monarchTab) {
-        fail('Open app.monarch.com in a tab first.');
-        return;
+        // Same as the ProjectionLab card: open the site for the user (in the background) and use it.
+        status.textContent = 'Opening Monarch…';
+        monarchTab = await openTabAndWait(MONARCH_ORIGIN + '/', { openInBackground: true, settleMs: MONARCH_LOAD_DELAY_MS });
       }
 
       progress.step(10);
@@ -1464,6 +1430,87 @@
     }
   };
 
+  /**
+   * ProjectionLab's newer account format keeps each loan as its own debt account instead of a
+   * second value on its asset. On the first ProjectionLab sync that returns that format, two-lane
+   * asset + loan rows become separate rows (Model.migrateToV5Mappings). The previous mappings are
+   * kept as a downloadable backup, and a notice in Map Accounts explains what changed.
+   * Accounts in the older format (no `kind`) leave two-lane rows as they are.
+   */
+  async function migrateLoansIfNeeded() {
+    if (!plAccounts.some((a) => a.kind)) return;
+    if (!accountMappings.some((m) => isAssetWithLoanMapping(m))) {
+      await chrome.storage.local.remove(['plAccountUpdateNeeded']);
+      return;
+    }
+    const plan = Model.planV5LoanMigration(accountMappings, plAccounts, splitMeta, {
+      extensionVersion: chrome.runtime.getManifest().version,
+    });
+    if (!plan) return;
+    accountMappings = plan.mappings;
+    await chrome.storage.local.set({
+      mappingsBackupBeforeLoanUpdate: { savedAt: Date.now(), backup: plan.backup },
+      loanUpdateNotice: { at: Date.now(), ...plan.summary },
+    });
+    await chrome.storage.local.remove(['plAccountUpdateNeeded']);
+    await persistMappings();
+    await renderLoanUpdateNotice();
+  }
+
+  // Sync Now can move loan rows too (when the popup syncs before Setup has). This page holds the
+  // rows in memory and saves them on every edit, so reload to pick up the moved rows rather than
+  // writing the old two-lane rows back.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.loanUpdateNotice) return;
+    const n = changes.loanUpdateNotice.newValue;
+    if (n && n.source === 'sync') location.reload();
+  });
+
+  /** The two-lane tip in Map Accounts only applies to ProjectionLab's older account format. */
+  function updateTwoLaneHint() {
+    const hint = document.getElementById('hint-two-lane');
+    if (hint) hint.hidden = plAccounts.some((a) => a.kind);
+  }
+
+  async function renderLoanUpdateNotice() {
+    updateTwoLaneHint();
+    const box = document.getElementById('loan-notice');
+    if (!box) return;
+    const { loanUpdateNotice: n, mappingsBackupBeforeLoanUpdate: saved } =
+      await chrome.storage.local.get(['loanUpdateNotice', 'mappingsBackupBeforeLoanUpdate']);
+    if (!n) { box.hidden = true; return; }
+    const rowsText = `${n.rows} ${n.rows === 1 ? 'row' : 'rows'}`;
+    const parts = [`ProjectionLab now keeps each loan as its own account, so Chrysalis moved ${rowsText} that had an Asset value and a Loan lane to one account per row.`];
+    if (n.loansLinked) parts.push(`${n.loansLinked} ${n.loansLinked === 1 ? 'loan was' : 'loans were'} matched to ${n.loansLinked === 1 ? 'its' : 'their'} ProjectionLab loan account.`);
+    if (n.loansToPick) parts.push(`${n.loansToPick} ${n.loansToPick === 1 ? 'loan needs' : 'loans need'} you to pick the ProjectionLab loan account: look for the ${n.loansToPick === 1 ? 'row' : 'rows'} titled "Loan for …".`);
+    box.innerHTML = '';
+    box.appendChild(el('div', 'loan-notice-text', parts.join(' ')));
+    const actions = el('div', 'loan-notice-actions');
+    if (saved && saved.backup) {
+      const dl = el('button', 'loan-notice-btn', 'Download previous mappings');
+      dl.type = 'button';
+      dl.onclick = () => {
+        const blob = new Blob([JSON.stringify(saved.backup, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'chrysalis-mappings-before-loan-update.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      actions.appendChild(dl);
+    }
+    const dismiss = el('button', 'loan-notice-btn', 'Dismiss');
+    dismiss.type = 'button';
+    dismiss.onclick = async () => {
+      await chrome.storage.local.remove(['loanUpdateNotice']);
+      box.hidden = true;
+    };
+    actions.appendChild(dismiss);
+    box.appendChild(actions);
+    box.hidden = false;
+  }
+
   document.getElementById('load-pl-accounts').onclick = async () => {
     const btn = document.getElementById('load-pl-accounts');
     const status = document.getElementById('load-status-pl');
@@ -1477,6 +1524,13 @@
       plAccounts = await fetchPLAccounts();
       await chrome.storage.local.set({ cachedPLAccounts: plAccounts });
       reconcileMappingsWithAccounts();
+      updateTwoLaneHint();
+      try {
+        await migrateLoansIfNeeded();
+      } catch (e) {
+        // The accounts synced; only the loan-row update failed. It runs again on the next sync.
+        console.error('[Chrysalis] Moving loans to their own rows failed:', e);
+      }
       progress.finish('ok');
       markRefreshed('pl', 'lastPLRefreshTime');
       setLoadOutcome(status, 'ok', `Synced ${accountsLabel(plAccounts.length)}.`);
@@ -1552,6 +1606,7 @@
             report.hasAPI = true;
             try {
               report.apiKeys = Object.keys(window.projectionlabPluginAPI);
+              report.version = window.projectionlabPluginAPI.version;
             } catch (_) {}
           }
           try {
@@ -1577,6 +1632,7 @@
         '(Checking page\'s main context.)',
         'URL: ' + (r.url || ''),
         'window.projectionlabPluginAPI: ' + (r.hasAPI ? 'present' : 'MISSING'),
+        r.hasAPI ? '  version: ' + (r.version == null ? 'none (app V4, contract 1)' : r.version + (r.version === 2 ? ' (app V5)' : ' (not supported by this Chrysalis)')) : '',
         r.hasAPI ? '  methods: ' + (r.apiKeys?.join(', ') || '[]') : '',
         'Other window keys (projection/plugin/export): ' + (r.windowKeys?.join(', ') || 'none'),
         hint ? '' : null,
@@ -1604,22 +1660,38 @@
         target: { tabId: plTab.id },
         world: 'MAIN',
         func: async (apiKey) => {
-          if (typeof window.projectionlabPluginAPI === 'undefined' || typeof window.projectionlabPluginAPI.exportData !== 'function') {
-            return { error: 'Plugin API or exportData not available' };
-          }
-          const data = await window.projectionlabPluginAPI.exportData({ key: apiKey });
-          const today = data.today || data;
+          const api = window.projectionlabPluginAPI;
+          if (!api) return { error: 'Plugin API not available' };
+          const contract = api.version == null ? 1 : api.version;
           const sample = (arr, label) => {
             const items = Array.isArray(arr) ? arr : [];
-            const accountTypes = items.length ? [...new Set(items.map((a) => a.type || '').filter(Boolean))] : [];
+            const accountTypes = items.length
+              ? [...new Set(items.map((a) => [a.type, a.subtype].filter(Boolean).join(' / ')).filter(Boolean))]
+              : [];
             const keys = items.length ? Object.keys(items[0]) : [];
             return { type: label, keys, samples: items, accountTypes };
           };
+          if (contract === 2) {
+            // V5: getAccounts() records grouped by kind (account, debt, real-asset).
+            const list = await api.getAccounts({ key: apiKey });
+            const byKind = {};
+            for (const a of Array.isArray(list) ? list : []) (byKind[a.kind || 'unknown'] = byKind[a.kind || 'unknown'] || []).push(a);
+            const groups = {};
+            for (const [kind, items] of Object.entries(byKind)) groups[kind] = sample(items, kind);
+            return { contract, groups };
+          }
+          if (contract !== 1) return { error: `Unsupported plugin API version ${contract}` };
+          if (typeof api.exportData !== 'function') return { error: 'Plugin API or exportData not available' };
+          const data = await api.exportData({ key: apiKey });
+          const today = data.today || data;
           return {
-            savingsAccounts: sample(today.savingsAccounts, 'savingsAccounts'),
-            investmentAccounts: sample(today.investmentAccounts, 'investmentAccounts'),
-            assets: sample(today.assets, 'assets'),
-            debts: sample(today.debts, 'debts'),
+            contract,
+            groups: {
+              savingsAccounts: sample(today.savingsAccounts, 'savingsAccounts'),
+              investmentAccounts: sample(today.investmentAccounts, 'investmentAccounts'),
+              assets: sample(today.assets, 'assets'),
+              debts: sample(today.debts, 'debts'),
+            },
           };
         },
         args: [key],
@@ -1633,12 +1705,21 @@
         out.textContent = payload.error;
         return;
       }
+      const header = payload.contract === 2
+        ? [
+            'ProjectionLab plugin API version 2 (app V5): getAccounts() records, grouped by kind.',
+            'We write with updateAccountValues by kind: account→balance, debt→balance (positive owed), real-asset→value.',
+            '"Account types" lists each type / subtype seen, which decides savings vs investment grouping.',
+          ]
+        : [
+            'ProjectionLab plugin API (app V4, no version): exportData schema (all accounts per category).',
+            'We use CATEGORY for updateAccount: savingsAccounts→balance, investmentAccounts→balance, assets→balance, debts→amount.',
+            'Account "type" (taxable, roth-ira, savings, debt) is per-account; we only use which category the account is in.',
+          ];
       const lines = [
-        'ProjectionLab exportData schema (all accounts per category).',
-        'We use CATEGORY for updateAccount: savingsAccounts→balance, investmentAccounts→balance, assets→balance, debts→amount.',
-        'Account "type" (taxable, roth-ira, savings, debt) is per-account; we only use which category the account is in.',
+        ...header,
         '',
-        ...Object.entries(payload).map(([cat, v]) => {
+        ...Object.entries(payload.groups || {}).map(([cat, v]) => {
           if (!v || v.error) return `${cat}: (none or error)`;
           const keyList = v.keys && v.keys.length ? v.keys.join(', ') : '—';
           const balanceLike = v.keys && v.keys.filter((k) => /balance|amount|value|current/i.test(k));
@@ -1680,12 +1761,12 @@
     other_asset: 'Other Assets',
   };
   const MONARCH_CATEGORY_ORDER = ['depository', 'credit', 'brokerage', 'loan', 'vehicle', 'real_estate', 'valuables', 'equity', 'other_liability', 'other_asset'];
-  const PL_CATEGORY_ORDER = ['Savings', 'Investments', 'Real Assets', 'Unsecured Debts'];
+  const PL_CATEGORY_ORDER = ['Savings', 'Investments', 'Real Assets', 'Debts'];
   const PL_TYPE_TO_CATEGORY = {
     savings: 'Savings',
     investment: 'Investments',
     asset: 'Real Assets',
-    debt: 'Unsecured Debts',
+    debt: 'Debts',
   };
   function getPLCategory(plAccount) {
     const type = (plAccount.type || 'asset').toLowerCase();
@@ -2580,6 +2661,11 @@
           const opt = document.createElement('div');
           opt.className = 'monarch-add-panel-option';
           opt.textContent = a.name;
+          if (a.securedByAssetId) {
+            // New ProjectionLab format: a loan is its own debt account, linked to its asset.
+            const asset = plAccounts.find((x) => x.id === a.securedByAssetId);
+            opt.appendChild(el('span', 'opt-sub opt-secured', `Secured by ${asset ? asset.name : 'an archived asset'}`));
+          }
           opt.setAttribute('data-id', a.id);
           opt.setAttribute('role', 'option');
           opt.onclick = () => {

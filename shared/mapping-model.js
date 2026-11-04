@@ -512,8 +512,183 @@
     return result;
   }
 
+  // ---------- ProjectionLab plugin API contract (V4 / V5) ----------
+  //
+  // ProjectionLab's app V4 exposes a plugin API with no `version` property (contract 1).
+  // App V5 exposes `version: 2` with getAccounts() and updateAccountValues(). Chrysalis reads
+  // the version from the page on every connection and takes the matching path; it never infers
+  // the contract from the hostname and never retries a failed V5 write through V4.
+
+  const PL_CONTRACT_V4 = 1;
+  const PL_CONTRACT_V5 = 2;
+  const SUPPORTED_PL_CONTRACTS = [PL_CONTRACT_V4, PL_CONTRACT_V5];
+
+  /** The contract a page's `projectionlabPluginAPI.version` stands for (absent means V4). */
+  function plContractOf(version) {
+    return version == null ? PL_CONTRACT_V4 : version;
+  }
+
+  function isSupportedPlContract(contract) {
+    return SUPPORTED_PL_CONTRACTS.includes(contract);
+  }
+
+  function unsupportedPlContractMessage(contract) {
+    return `This version of ProjectionLab's plugin API (version ${contract}) isn't supported yet. Update Chrysalis.`;
+  }
+
+  /**
+   * Today's category (`plType`) for a V5 account: savings | investment | asset | debt, or null.
+   * ProjectionLab's own account registry puts only type "savings" (checking, savings, money market)
+   * in its Savings section; every other `kind: "account"` type (401k, IRA, taxable, HSA, 529,
+   * crypto, …) is in Investments. Same split as V4's savingsAccounts / investmentAccounts.
+   */
+  function v5CategoryOf(account) {
+    if (!account) return null;
+    if (account.kind === 'debt') return 'debt';
+    if (account.kind === 'real-asset') return 'asset';
+    if (account.kind === 'account') return account.type === 'savings' ? 'savings' : 'investment';
+    return null;
+  }
+
+  /**
+   * A V5 getAccounts() record in the shape Setup caches for V4 accounts:
+   * { id, name, type: <category>, nativeType, kind, v5Type, subtype, securedByAssetId }.
+   * `nativeType` is always empty: it feeds isAssetWithLoanMapping(), and on V5 a loan is its own
+   * debt account, so no row is ever two-lane. Returns null for kinds Chrysalis doesn't know.
+   */
+  function normalizeV5Account(raw) {
+    const category = v5CategoryOf(raw);
+    if (!raw || raw.id == null || !category) return null;
+    const id = String(raw.id);
+    return {
+      id,
+      name: raw.name || id,
+      type: category,
+      nativeType: '',
+      kind: raw.kind,
+      v5Type: raw.type || '',
+      subtype: raw.subtype || '',
+      securedByAssetId: raw.securedByAssetId != null ? String(raw.securedByAssetId) : null,
+    };
+  }
+
+  const V5_MISSING_ACCOUNT_ERROR =
+    "This ProjectionLab account wasn't found. It may have been archived or deleted. Pick its ProjectionLab account again in Setup.";
+  const V5_LOAN_NOT_SYNCED_WARNING =
+    "The loan balance wasn't synced. ProjectionLab now keeps each loan as its own account: open Setup and sync your ProjectionLab accounts to move this loan to its own row.";
+
+  /**
+   * Plan V5 writes from the sync's planned updates and a fresh getAccounts() list.
+   * updates: [{ plId, balance }] for single-lane rows, or
+   *          [{ plId, isAssetWithLoan: true, valueSum, loanSum, hasValue, hasLoan }].
+   * Returns one entry per update: { plId, values } to write, or { plId, error } to report, plus an
+   * optional `warning`. The field is chosen from the account's current `kind`, not the saved
+   * mapping, so a stale mapping can't send a value to the wrong field.
+   */
+  function planV5Writes(updates, accounts) {
+    const byId = new Map((accounts || []).filter(Boolean).map((a) => [String(a.id), a]));
+    return (updates || []).map((u) => {
+      const plId = u.plId;
+      const acc = byId.get(String(plId));
+      if (!acc) return { plId, error: V5_MISSING_ACCOUNT_ERROR };
+      if (u.isAssetWithLoan) {
+        if (acc.kind !== 'real-asset') {
+          // V4's asset-with-loan check matches type text, so some non-assets get two lanes
+          // (e.g. "credit-card" contains "car"). With nothing in the Loan lane, the value lane is
+          // simply this account's balance.
+          if (!u.hasLoan && u.hasValue) return planV5Writes([{ plId, balance: u.valueSum }], [acc])[0];
+          return { plId, error: `This row syncs an asset and its loan, but "${acc.name}" isn't a real asset in ProjectionLab. Pick its ProjectionLab account again in Setup.` };
+        }
+        const value = Math.abs(Number(u.valueSum));
+        if (!u.hasValue) return { plId, error: V5_LOAN_NOT_SYNCED_WARNING };
+        if (!Number.isFinite(value)) return { plId, error: 'The asset value isn\'t a valid number.' };
+        const out = { plId, values: { value } };
+        if (u.hasLoan) out.warning = V5_LOAN_NOT_SYNCED_WARNING;
+        return out;
+      }
+      const n = Number(u.balance);
+      if (!Number.isFinite(n)) return { plId, error: 'The balance isn\'t a valid number.' };
+      if (acc.kind === 'account') return { plId, values: { balance: n } };
+      if (acc.kind === 'debt') return { plId, values: { balance: Math.abs(n) } };
+      if (acc.kind === 'real-asset') return { plId, values: { value: Math.abs(n) } };
+      return { plId, error: `Chrysalis doesn't know how to update a "${acc.kind}" account yet.` };
+    });
+  }
+
+  /**
+   * One-time move from V4 two-lane (asset + loan) rows to V5's one-account-per-row mappings.
+   * Each two-lane row becomes a normal row for the asset (its Asset value lane), and its Loan lane
+   * becomes a new row right after it:
+   *   - exactly one unmapped V5 debt has `securedByAssetId` = this asset → that debt is pre-filled;
+   *   - otherwise the row has no ProjectionLab account yet and a title asking the person to pick.
+   * Rows that were two-lane only by V4's type-text match (e.g. a credit card) just lose the lane.
+   * Pure: returns { mappings, summary: { rows, loansLinked, loansToPick } } and never edits input.
+   */
+  /**
+   * Everything a caller needs to move two-lane rows for ProjectionLab's newer account format, or
+   * null when there's nothing to do (accounts are in the older format, or no row has two lanes).
+   * Used by Setup's ProjectionLab account sync and by Sync Now, so both move rows the same way.
+   * Pure: returns { mappings, summary, backup } where `backup` is an export of the rows as they were.
+   */
+  function planV5LoanMigration(mappings, v5Accounts, splitMeta, extra) {
+    if (!(v5Accounts || []).some((a) => a && a.kind)) return null;
+    if (!(mappings || []).some((m) => isAssetWithLoanMapping(m))) return null;
+    const backup = buildExport(mappings, splitMeta || {}, extra || {});
+    const { mappings: moved, summary } = migrateToV5Mappings(mappings, v5Accounts);
+    return { mappings: moved, summary, backup };
+  }
+
+  function migrateToV5Mappings(mappings, v5Accounts) {
+    const accounts = (v5Accounts || []).filter(Boolean);
+    const byId = new Map(accounts.map((a) => [String(a.id), a]));
+    const mappedIds = new Set((mappings || []).map((m) => String(m.plId || '')).filter(Boolean));
+    const out = [];
+    const summary = { rows: 0, loansLinked: 0, loansToPick: 0 };
+    for (const m of mappings || []) {
+      if (!isAssetWithLoanMapping(m)) { out.push(m); continue; }
+      summary.rows += 1;
+      const acc = byId.get(String(m.plId));
+      out.push({
+        ...m,
+        plType: acc ? acc.type : m.plType,
+        plNativeType: '',
+        monarchAccounts: [...(m.monarchAccounts || [])],
+        monarchAccountsLoan: [],
+      });
+      const loanChips = m.monarchAccountsLoan || [];
+      if (!loanChips.length) continue;
+      const debts = accounts.filter((a) => a.kind === 'debt' && a.securedByAssetId === String(m.plId) && !mappedIds.has(String(a.id)));
+      if (debts.length === 1) {
+        const debt = debts[0];
+        mappedIds.add(String(debt.id));
+        summary.loansLinked += 1;
+        out.push({ plId: String(debt.id), plName: debt.name, plType: 'debt', plNativeType: '', monarchAccounts: [...loanChips], monarchAccountsLoan: [] });
+      } else {
+        summary.loansToPick += 1;
+        out.push({
+          plId: '', plName: '', plType: '', plNativeType: '',
+          monarchAccounts: [...loanChips], monarchAccountsLoan: [],
+          title: normalizeTitle(`Loan for ${m.plName || 'an asset'}: pick its ProjectionLab loan account`),
+        });
+      }
+    }
+    return { mappings: out, summary };
+  }
+
   const api = {
     SPLIT_PREFIX,
+    PL_CONTRACT_V4,
+    PL_CONTRACT_V5,
+    plContractOf,
+    isSupportedPlContract,
+    unsupportedPlContractMessage,
+    v5CategoryOf,
+    normalizeV5Account,
+    planV5Writes,
+    migrateToV5Mappings,
+    planV5LoanMigration,
+    V5_MISSING_ACCOUNT_ERROR,
+    V5_LOAN_NOT_SYNCED_WARNING,
     NOTE_MAX,
     TITLE_MAX,
     normalizeTitle,
