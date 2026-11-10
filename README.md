@@ -297,7 +297,6 @@ When your setup is complete, you'll see green visual feedback indicating each se
 
 When you select a ProjectionLab account that is one of these asset types, the row switches to a 2-lane layout that supports both the Asset and the Loan amount for that ProjectionLab account. On the Monarch side, you choose the Asset and Loan accounts individually. When synced to ProjectionLab, the Asset and Loan amounts from the 2 separate Monarch accounts are automatically merged into the 1 ProjectionLab account in the correct target fields.
 
-<kbd><img src="screenshots/mapping-asset-and-loan.png" width="600"></kbd>
 
 ### Assets and loans with ProjectionLab's new API
 
@@ -305,6 +304,8 @@ With ProjectionLab's new plugin API (on Early Access now, and on Production soon
 
 - **Asset row:** the Monarch asset account (e.g. your home's value) → the ProjectionLab real asset.
 - **Loan row:** the Monarch loan account (e.g. your mortgage) → the ProjectionLab loan. In the ProjectionLab list, loans are under **Debts** and show "Secured by …" with the asset they belong to.
+
+<kbd><img src="screenshots/mapping-asset-and-loan-rows.png" width="600" alt="Two mapping rows: 42 Maple St to the ProjectionLab asset Home, and Rocket Mortgage to the ProjectionLab loan Mortgage"></kbd>
 
 If you had 2-lane rows before switching to the new API, Chrysalis splits each one into these two rows the first time you click **Sync Now** or sync ProjectionLab accounts in Setup, and fills in the loan when it can find exactly one ProjectionLab loan secured by that asset. Any loan it can't match gets a row titled "Loan for …": pick its ProjectionLab loan account there. A notice in Map Accounts lists what moved and lets you download your previous mappings.
 
